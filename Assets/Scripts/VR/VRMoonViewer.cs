@@ -184,12 +184,12 @@ namespace MoonObserver.VR
             DateTime jst = _currentUtc.AddHours(9);
             string dirLabel = AzimuthToDirectionLabel((float)_moonState.AzimuthDeg);
 
-            if (altitudeText)     altitudeText.text     = $"高度:     {_moonState.AltitudeDeg:F1}°";
-            if (azimuthText)      azimuthText.text      = $"方位角:   {dirLabel} {_moonState.AzimuthDeg:F1}°";
-            if (moonAgeText)      moonAgeText.text      = $"月齢:     {_moonState.MoonAge:F1}日";
-            if (illuminationText) illuminationText.text = $"輝面比:   {_moonState.IlluminationFraction * 100:F1}%";
-            if (distanceText)     distanceText.text     = $"月の距離: {_moonState.DistanceKm:F0} km";
-            if (currentTimeText)  currentTimeText.text  = $"現在時刻: {jst:yyyy-MM-dd HH:mm} JST";
+            if (altitudeText)     altitudeText.text     = $"Altitude:  {_moonState.AltitudeDeg:F1}°";
+            if (azimuthText)      azimuthText.text      = $"Azimuth:   {dirLabel} {_moonState.AzimuthDeg:F1}°";
+            if (moonAgeText)      moonAgeText.text      = $"Moon Age:  {_moonState.MoonAge:F1} days";
+            if (illuminationText) illuminationText.text = $"Illumin:   {_moonState.IlluminationFraction * 100:F1}%";
+            if (distanceText)     distanceText.text     = $"Distance:  {_moonState.DistanceKm:F0} km";
+            if (currentTimeText)  currentTimeText.text  = $"Time (JST): {jst:yyyy-MM-dd HH:mm}";
         }
 
         private void ToggleInfoPanel()

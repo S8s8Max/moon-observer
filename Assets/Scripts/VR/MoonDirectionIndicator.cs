@@ -83,11 +83,11 @@ namespace MoonObserver.VR
         {
             if (_infoTMP == null) return;
 
-            string aboveBelow = state.AltitudeDeg >= 0 ? "地平線上" : "地平線下";
-            _infoTMP.text = $"月 {aboveBelow}\n高度 {state.AltitudeDeg:F0}°";
+            string horizon = state.AltitudeDeg >= 0 ? "Above horizon" : "Below horizon";
+            _infoTMP.text = $"Moon\n{horizon}\nAlt {state.AltitudeDeg:F0}°";
             _infoTMP.color = state.AltitudeDeg >= 0
                 ? new Color(1f, 0.95f, 0.6f)
-                : new Color(0.6f, 0.6f, 0.7f); // 地平線下はグレー
+                : new Color(0.6f, 0.6f, 0.7f);
         }
 
         // ── UI 生成 ────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ namespace MoonObserver.VR
             labelGO.transform.SetParent(_root.transform, false);
             labelGO.transform.localPosition = new Vector3(0f, -0.18f, 0f);
             _infoTMP = labelGO.AddComponent<TextMeshPro>();
-            _infoTMP.text      = "月";
+            _infoTMP.text      = "Moon";
             _infoTMP.fontSize  = 0.055f;
             _infoTMP.color     = Color.white;
             _infoTMP.alignment = TextAlignmentOptions.Center;
