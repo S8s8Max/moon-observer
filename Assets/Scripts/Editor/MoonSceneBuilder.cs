@@ -103,13 +103,20 @@ public static class MoonSceneBuilder
         var timeText  = CreateText(panelGO, "Current Time Text", new Vector2(0, -110));
 
         // ── 7. VRMoonViewer Controller ───────────────────────────────────
-        var viewerGO = new GameObject("VRMoonViewer");
-        var viewer   = viewerGO.AddComponent<VRMoonViewer>();
+        var viewerGO    = new GameObject("VRMoonViewer");
+        var viewer      = viewerGO.AddComponent<VRMoonViewer>();
         viewer.moonRenderer        = moonRendererComp;
         viewer.moonTransform       = moonGO.transform;
         viewer.atmosphericEffects  = atmEffects;
         // skyboxController は null のまま (NightSkyController が独立して夜空を管理)
         viewer.infoPanel           = panelGO;
+
+        // ── 8. Moon Direction Indicator ─────────────────────────────────
+        var indicatorGO = new GameObject("Moon Direction Indicator Host");
+        var indicator   = indicatorGO.AddComponent<MoonDirectionIndicator>();
+        indicator.moonTransform = moonGO.transform;
+        // vrCamera は Start() で Camera.main から自動検出
+        viewer.moonIndicator = indicator;
         viewer.altitudeText        = altText;
         viewer.azimuthText         = azText;
         viewer.moonAgeText         = ageText;

@@ -36,6 +36,9 @@ namespace MoonObserver.VR
         [Tooltip("useRealTime=false 時の参照 UTC 日時")]
         public string manualUtcTime = "2026-09-21T12:00:00";
 
+        [Header("方向インジケーター")]
+        public MoonDirectionIndicator moonIndicator;
+
         [Header("UI パネル")]
         public GameObject infoPanel;
         public TextMeshProUGUI altitudeText;
@@ -152,6 +155,7 @@ namespace MoonObserver.VR
 
             SetMoonTransformPosition();
             UpdateInfoUI();
+            moonIndicator?.SetMoonState(_moonState);
         }
 
         private void SetMoonTransformPosition()
