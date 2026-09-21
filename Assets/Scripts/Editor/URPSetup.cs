@@ -51,6 +51,7 @@ public static class URPSetup
         // すでに URP が有効ならそのまま使う
         if (GraphicsSettings.defaultRenderPipeline is UniversalRenderPipelineAsset current)
         {
+            EnablePostProcessing(current);
             AssignToAllQualityLevels(current);
             return current;
         }
@@ -70,6 +71,7 @@ public static class URPSetup
 
         // Renderer が確実に紐づいているか検証して必要なら修復
         WireRendererData(pipeline, rendererData);
+        EnablePostProcessing(pipeline);
 
         GraphicsSettings.defaultRenderPipeline = pipeline;
         AssignToAllQualityLevels(pipeline);
@@ -177,6 +179,24 @@ public static class URPSetup
         }
 
         QualitySettings.SetQualityLevel(original, false);
+    }
+
+    /// <summary>URP Pipeline Asset の Post Processing を有効化する。</summary>
+    static void EnablePostProcessing(UniversalRenderPipelineAsset pipeline)
+    {
+        var so = new SerializedObject(pipeline);
+        // URP 14+ では m_UseHDR, m_SupportHDR 等のフィールドがある
+        // Post Processing 自体のトグルは m_SupportsHDR / m_Bloom はなく
+        // カメラ側の renderPostProcessing で制御されるが、
+        // HDR 出力を有効にしないと Bloom が正しく機能しない
+        var hdr = so.FindProperty("m_SupportsHDR");
+        if (hdr != null && !hdr.boolValue)
+        {
+            hdr.boolValue = true;
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(pipeline);
+            Debug.Log("[URPSetup] HDR (Post Processing) を有効化しました。");
+        }
     }
 
     /// <summary>現在アクティブなレンダーパイプラインをログ出力する。</summary>

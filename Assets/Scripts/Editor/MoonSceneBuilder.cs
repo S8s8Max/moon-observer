@@ -4,6 +4,8 @@ using UnityEditor;
 using UnityEditor.Rendering;
 using UnityEditor.SceneManagement;
 using Unity.XR.CoreUtils;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using MoonObserver.Rendering;
 using MoonObserver.Atmospheric;
 using MoonObserver.VR;
@@ -126,14 +128,29 @@ public static class MoonSceneBuilder
         viewer.locationService = location;
         viewer.weatherService  = weather;
 
-        // ── 8. Moon Direction Indicator ──────────────────────────────────
+        // ── 8. Post-Processing Volume (Bloom / Tonemapping / Vignette) ───
+        var volumeGO    = BuildPostProcessVolume(out var cinematic);
+        cinematic.hudRoot = hudGO;
+
+        // カメラに Post Processing を有効化
+        if (vrCamera != null)
+        {
+            var camGO   = vrCamera.gameObject;
+            var camData = camGO.GetComponent<UniversalAdditionalCameraData>()
+                       ?? camGO.AddComponent<UniversalAdditionalCameraData>();
+            camData.renderPostProcessing = true;
+            camData.volumeLayerMask      = -1; // Everything
+            camData.antialiasing         = AntialiasingMode.FastApproximateAntialiasing;
+        }
+
+        // ── 10. Moon Direction Indicator ─────────────────────────────────
         var indicatorGO = new GameObject("Moon Direction Indicator Host");
         var indicator   = indicatorGO.AddComponent<MoonDirectionIndicator>();
         indicator.moonTransform = moonGO.transform;
         if (vrCamera != null) indicator.vrCamera = vrCamera;
         viewer.moonIndicator = indicator;
 
-        // ── 9. XR Device Simulator ───────────────────────────────────────
+        // ── 11. XR Device Simulator ──────────────────────────────────────
         // PC テストでは XR Device Simulator がマウス入力を横取りするため自動配置しない。
         // VR コントローラーをエディターで模擬したい場合は
         // Assets/Samples/XR Interaction Toolkit/.../XR Device Simulator を手動で配置してください。
@@ -162,6 +179,65 @@ public static class MoonSceneBuilder
             "OK");
 
         Debug.Log("[MoonSceneBuilder] シーン構築完了: " + scenePath);
+    }
+
+    // ── Post-Processing Volume を構築 ────────────────────────────────────
+    static GameObject BuildPostProcessVolume(out CinematicOpening cinematic)
+    {
+        var go     = new GameObject("Post-Process Volume");
+        var volume = go.AddComponent<Volume>();
+        volume.isGlobal = true;
+        volume.priority = 10f;
+
+        var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+        profile.name = "NightSkyProfile";
+
+        // ── Bloom ──────────────────────────────────────────────────────
+        var bloom = profile.Add<Bloom>(overrides: true);
+        bloom.threshold.Override(0.6f);
+        bloom.intensity.Override(0.7f);
+        bloom.scatter.Override(0.65f);
+        bloom.tint.Override(new Color(0.96f, 0.94f, 1.00f)); // わずかに青白い月明かり
+
+        // ── Tonemapping (ACES) ─────────────────────────────────────────
+        var tone = profile.Add<Tonemapping>(overrides: true);
+        tone.mode.Override(TonemappingMode.ACES);
+
+        // ── Vignette ──────────────────────────────────────────────────
+        var vignette = profile.Add<Vignette>(overrides: true);
+        vignette.intensity.Override(0.0f);  // 演出後は無効 (CinematicOpening が制御)
+        vignette.smoothness.Override(0.4f);
+        vignette.color.Override(Color.black);
+
+        // ── Color Adjustments ─────────────────────────────────────────
+        var colorAdj = profile.Add<ColorAdjustments>(overrides: true);
+        colorAdj.postExposure.Override(0f);
+        colorAdj.contrast.Override(5f);        // 夜空のコントラストをわずかに上げる
+        colorAdj.colorFilter.Override(new Color(0.97f, 0.97f, 1.05f)); // 寒色寄り
+
+        // プロファイルをアセットとして保存
+        if (!AssetDatabase.IsValidFolder("Assets/Settings"))
+            AssetDatabase.CreateFolder("Assets", "Settings");
+
+        string profilePath = "Assets/Settings/NightSkyPostProcess.asset";
+        var existing = AssetDatabase.LoadAssetAtPath<VolumeProfile>(profilePath);
+        if (existing == null)
+        {
+            AssetDatabase.CreateAsset(profile, profilePath);
+        }
+        else
+        {
+            profile = existing;
+        }
+        volume.sharedProfile = profile;
+
+        // ── CinematicOpening (起動演出) ───────────────────────────────
+        cinematic = go.AddComponent<CinematicOpening>();
+        cinematic.bloomPeakIntensity = 3.5f;
+        cinematic.bloomIdleIntensity = 0.7f;
+
+        Debug.Log("[MoonSceneBuilder] Post-Processing Volume を構築しました: " + profilePath);
+        return go;
     }
 
     // ── XR Origin を手動生成 ─────────────────────────────────────────────
