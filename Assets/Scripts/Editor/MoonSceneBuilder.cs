@@ -1,6 +1,7 @@
 using System.IO;
 using UnityEngine;
 using UnityEditor;
+using UnityEditor.Rendering;
 using UnityEditor.SceneManagement;
 using Unity.XR.CoreUtils;
 using TMPro;
@@ -25,14 +26,21 @@ public static class MoonSceneBuilder
         // ── 0. TMP Essential Resources ───────────────────────────────────
         EnsureTMPResources();
 
+        // ── 0b. シェーダーを検証 (コンパイルエラーを可視化) ───────────────
+        ValidateAllShaders();
+
         EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
         // ── Materials フォルダ確保 ───────────────────────────────────────
         if (!AssetDatabase.IsValidFolder("Assets/Materials"))
             AssetDatabase.CreateFolder("Assets", "Materials");
 
-        var moonSurfaceMat    = GetOrCreateMaterial("Assets/Materials/MoonSurface.mat",    "MoonObserver/MoonSurface");
-        var moonAtmosphereMat = GetOrCreateMaterial("Assets/Materials/MoonAtmosphere.mat", "MoonObserver/MoonAtmosphere");
+        var moonSurfaceMat    = GetOrCreateMaterial("Assets/Materials/MoonSurface.mat",
+                                                    "MoonObserver/MoonSurface",
+                                                    "Universal Render Pipeline/Lit");
+        var moonAtmosphereMat = GetOrCreateMaterial("Assets/Materials/MoonAtmosphere.mat",
+                                                    "MoonObserver/MoonAtmosphere",
+                                                    "Universal Render Pipeline/Unlit");
 
         // ── 1. Directional Light (Sun) ───────────────────────────────────
         var sunGO    = new GameObject("Sun");
@@ -50,15 +58,16 @@ public static class MoonSceneBuilder
         var moonGO       = new GameObject("Moon");
         moonGO.AddComponent<MeshFilter>();
         var meshRenderer = moonGO.AddComponent<MeshRenderer>();
-        meshRenderer.material = moonSurfaceMat;
+        // エディター上では material を使うとインスタンスがシーンにリークするため sharedMaterial
+        meshRenderer.sharedMaterial = moonSurfaceMat;
         var moonRendererComp = moonGO.AddComponent<MoonRenderer>();
         moonRendererComp.moonMaterial       = moonSurfaceMat;
         moonRendererComp.placementDistanceM = 600f; // 星球 (800m) より手前
         moonRendererComp.sunLight           = sunLight;
         moonGO.transform.position = new Vector3(0f, 0f, 600f);
 
-        // テクスチャを自動割り当て
-        AutoAssignTextures(moonRendererComp);
+        // テクスチャを自動割り当て (MoonRenderer とマテリアル両方へ)
+        AutoAssignTextures(moonRendererComp, moonSurfaceMat);
 
         // ── 4. Atmosphere Effects ────────────────────────────────────────
         var atmosphereGO = new GameObject("Atmosphere Effects");
@@ -78,6 +87,10 @@ public static class MoonSceneBuilder
         var nightSkyGO  = new GameObject("Night Sky");
         var nightSkyCon = nightSkyGO.AddComponent<NightSkyController>();
         nightSkyCon.moonGlowLight = glowLight;
+
+        // ── 5c. Horizon Reference (地平線グリッド + 方位 N/E/S/W) ────────
+        var horizonGO = new GameObject("Horizon Reference");
+        horizonGO.AddComponent<HorizonReference>();
 
         // ── 6. UI Canvas ─────────────────────────────────────────────────
         var canvasGO = new GameObject("UI Canvas");
@@ -164,8 +177,12 @@ public static class MoonSceneBuilder
         xrOrigin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
 
         // Camera Offset
+        // PC テストでは XR トラッキングが無くカメラが y=0 のままになり、
+        // 地平面グリッドと同一平面で見えなくなるため目線高さを与えておく
+        // (Quest 実機では XR トラッキングがこの値を上書きする)
         var camOffsetGO = new GameObject("Camera Offset");
         camOffsetGO.transform.SetParent(xrOriginGO.transform, false);
+        camOffsetGO.transform.localPosition = new Vector3(0f, 1.6f, 0f);
 
         // Main Camera
         var camGO = new GameObject("Main Camera");
@@ -182,27 +199,6 @@ public static class MoonSceneBuilder
         xrOrigin.Camera = vrCamera;
 
         return xrOriginGO;
-    }
-
-    // ── XR Device Simulator プレハブを自動配置 ───────────────────────────
-    static void InstantiateXRDeviceSimulator()
-    {
-        // Samples フォルダ内のプレハブを検索
-        string[] guids = AssetDatabase.FindAssets("XR Device Simulator t:Prefab");
-        if (guids.Length == 0)
-        {
-            Debug.Log("[MoonSceneBuilder] XR Device Simulator プレハブが見つかりません。\n" +
-                      "Package Manager → XR Interaction Toolkit → Samples → XR Device Simulator → Import");
-            return;
-        }
-
-        string path   = AssetDatabase.GUIDToAssetPath(guids[0]);
-        var    prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-        if (prefab != null)
-        {
-            PrefabUtility.InstantiatePrefab(prefab);
-            Debug.Log("[MoonSceneBuilder] XR Device Simulator を自動追加しました: " + path);
-        }
     }
 
     // ── TMP Essential Resources を自動インポート ─────────────────────────
@@ -233,40 +229,162 @@ public static class MoonSceneBuilder
     }
 
     // ── テクスチャ自動割り当て ────────────────────────────────────────────
-    static void AutoAssignTextures(MoonRenderer renderer)
+    static void AutoAssignTextures(MoonRenderer renderer, Material moonMat)
     {
+        if (!AssetDatabase.IsValidFolder("Assets/Textures/Moon"))
+        {
+            Debug.LogWarning("[MoonSceneBuilder] Assets/Textures/Moon フォルダがありません。\n" +
+                             "NASA のカラーマップを配置すると月面テクスチャが適用されます。");
+            return;
+        }
+
         // Assets/Textures/Moon/ 以下の画像を検索
         string[] colorGuids = AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/Textures/Moon" });
         foreach (var guid in colorGuids)
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
             string name = Path.GetFileNameWithoutExtension(path).ToLower();
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (tex == null) continue;
 
             if (name.Contains("color") || name.Contains("lroc"))
             {
-                renderer.colorMap = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                renderer.colorMap = tex;
+                // マテリアルにも直接設定して Play 前から正しく見えるようにする
+                if (moonMat != null && moonMat.HasProperty("_BaseMap"))
+                    moonMat.SetTexture("_BaseMap", tex);
                 Debug.Log("[MoonSceneBuilder] カラーマップを自動割り当て: " + path);
             }
             else if (name.Contains("normal") || name.Contains("bump") || name.Contains("ldem"))
             {
-                renderer.normalMap = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                renderer.normalMap = tex;
+                if (moonMat != null && moonMat.HasProperty("_BumpMap"))
+                    moonMat.SetTexture("_BumpMap", tex);
                 Debug.Log("[MoonSceneBuilder] 法線マップを自動割り当て: " + path);
             }
+        }
+
+        if (moonMat != null)
+        {
+            EditorUtility.SetDirty(moonMat);
+            AssetDatabase.SaveAssetIfDirty(moonMat);
         }
     }
 
     // ── ヘルパー ─────────────────────────────────────────────────────────
 
-    static Material GetOrCreateMaterial(string path, string shaderName)
+    static Material GetOrCreateMaterial(string path, string shaderName, string fallbackShaderName)
     {
-        var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (existing != null) return existing;
+        var shader = ResolveShader(shaderName, fallbackShaderName);
+        if (shader == null)
+        {
+            Debug.LogError($"[MoonSceneBuilder] シェーダーを解決できませんでした: {shaderName}");
+            return null;
+        }
 
-        var shader = Shader.Find(shaderName)
-                  ?? Shader.Find("Universal Render Pipeline/Lit");
+        var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (existing != null)
+        {
+            // 既存マテリアルが壊れたシェーダーを参照している場合は修復する
+            if (existing.shader != shader)
+            {
+                Debug.Log($"[MoonSceneBuilder] マテリアル '{path}' のシェーダーを " +
+                          $"'{existing.shader?.name}' → '{shader.name}' に差し替えました。");
+                existing.shader = shader;
+                EditorUtility.SetDirty(existing);
+                AssetDatabase.SaveAssetIfDirty(existing);
+            }
+            return existing;
+        }
+
         var mat = new Material(shader) { name = Path.GetFileNameWithoutExtension(path) };
         AssetDatabase.CreateAsset(mat, path);
         return mat;
+    }
+
+    /// <summary>
+    /// シェーダーを取得する。コンパイルエラーがある場合は内容をログ出力し、
+    /// フォールバックシェーダーを返す (ピンク表示を防ぐ)。
+    /// </summary>
+    static Shader ResolveShader(string shaderName, string fallbackShaderName)
+    {
+        var shader = Shader.Find(shaderName);
+
+        if (shader == null)
+        {
+            Debug.LogWarning($"[MoonSceneBuilder] シェーダー '{shaderName}' が見つかりません " +
+                             $"→ '{fallbackShaderName}' を使用します。");
+            return Shader.Find(fallbackShaderName);
+        }
+
+        if (ShaderUtil.ShaderHasError(shader))
+        {
+            LogShaderMessages(shader);
+            Debug.LogWarning($"[MoonSceneBuilder] '{shaderName}' はコンパイルエラーのため " +
+                             $"'{fallbackShaderName}' で代替します。");
+            return Shader.Find(fallbackShaderName);
+        }
+
+        return shader;
+    }
+
+    /// <summary>プロジェクト内の自作シェーダーを検証し、エラー内容をコンソールへ出力する。</summary>
+    [MenuItem("MoonObserver/Validate Shaders")]
+    public static void ValidateAllShaders()
+    {
+        string[] names =
+        {
+            "MoonObserver/MoonSurface",
+            "MoonObserver/MoonAtmosphere",
+            "MoonObserver/StarField",
+        };
+
+        int errorCount = 0;
+        foreach (var name in names)
+        {
+            var shader = Shader.Find(name);
+            if (shader == null)
+            {
+                Debug.LogWarning($"[ShaderCheck] '{name}' が見つかりません。");
+                continue;
+            }
+            if (ShaderUtil.ShaderHasError(shader))
+            {
+                errorCount++;
+                LogShaderMessages(shader);
+            }
+            else
+            {
+                Debug.Log($"[ShaderCheck] OK: {name}");
+            }
+        }
+
+        if (errorCount == 0)
+            Debug.Log("[ShaderCheck] すべてのシェーダーが正常にコンパイルされています。");
+    }
+
+    /// <summary>シェーダーのコンパイルメッセージを行番号付きで出力する。</summary>
+    static void LogShaderMessages(Shader shader)
+    {
+        var messages = ShaderUtil.GetShaderMessages(shader);
+        if (messages == null || messages.Length == 0)
+        {
+            Debug.LogError($"[ShaderCheck] '{shader.name}' にエラーがありますが詳細を取得できませんでした。\n" +
+                           "Project ウィンドウでシェーダーを選択して Inspector を確認してください。");
+            return;
+        }
+
+        foreach (var m in messages)
+        {
+            string text = $"[ShaderCheck] {shader.name} ({m.platform}) line {m.line}: {m.message}";
+            if (!string.IsNullOrEmpty(m.messageDetails))
+                text += "\n" + m.messageDetails;
+
+            if (m.severity == ShaderCompilerMessageSeverity.Error)
+                Debug.LogError(text);
+            else
+                Debug.LogWarning(text);
+        }
     }
 
     static TextMeshProUGUI CreateText(GameObject parent, string objName, Vector2 anchoredPos)

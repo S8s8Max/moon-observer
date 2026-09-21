@@ -50,12 +50,17 @@ namespace MoonObserver.Rendering
             _meshRenderer = GetComponent<MeshRenderer>();
             if (moonMaterial != null)
             {
+                // material を代入するとインスタンスが生成されるため、
+                // テクスチャはアセットではなくインスタンス側へ設定する
                 _meshRenderer.material = moonMaterial;
+                var mat = _meshRenderer.material;
+
                 if (colorMap != null)
-                    moonMaterial.SetTexture("_BaseMap", colorMap);
+                    mat.SetTexture("_BaseMap", colorMap);
                 if (normalMap != null)
-                    moonMaterial.SetTexture("_BumpMap", normalMap);
-                moonMaterial.SetFloat("_Smoothness", 0.05f); // 月面は非常に拡散反射
+                    mat.SetTexture("_BumpMap", normalMap);
+                if (mat.HasProperty("_Smoothness"))
+                    mat.SetFloat("_Smoothness", 0.05f); // 月面は非常に拡散反射
             }
 
             // メッシュがなければ球を生成
