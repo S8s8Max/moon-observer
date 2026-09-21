@@ -38,9 +38,10 @@ Shader "MoonObserver/MoonSurface"
             HLSLPROGRAM
             #pragma vertex   Vert
             #pragma fragment Frag
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _SHADOWS_SOFT
             #pragma multi_compile_fog
+            #pragma multi_compile _ REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -77,7 +78,9 @@ Shader "MoonObserver/MoonSurface"
                 float3 normalWS    : TEXCOORD2;
                 float3 tangentWS   : TEXCOORD3;
                 float3 bitangentWS : TEXCOORD4;
-                float4 shadowCoord : TEXCOORD5;
+                #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
+                    float4 shadowCoord : TEXCOORD5;
+                #endif
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -95,8 +98,10 @@ Shader "MoonObserver/MoonSurface"
                 OUT.normalWS    = normInputs.normalWS;
                 OUT.tangentWS   = normInputs.tangentWS;
                 OUT.bitangentWS = normInputs.bitangentWS;
-                OUT.uv          = TRANSFORM_TEX(IN.uv, _BaseMap);
-                OUT.shadowCoord = GetShadowCoord(posInputs);
+                OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
+                #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
+                    OUT.shadowCoord = GetShadowCoord(posInputs);
+                #endif
                 return OUT;
             }
 
@@ -129,12 +134,18 @@ Shader "MoonObserver/MoonSurface"
                 inputData.positionWS     = IN.positionWS;
                 inputData.normalWS       = normalWS;
                 inputData.viewDirectionWS = normalize(GetCameraPositionWS() - IN.positionWS);
-                inputData.shadowCoord    = IN.shadowCoord;
+                #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
+                    inputData.shadowCoord = IN.shadowCoord;
+                #elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
+                    inputData.shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
+                #else
+                    inputData.shadowCoord = float4(0, 0, 0, 0);
+                #endif
                 inputData.fogCoord       = 0;
                 inputData.vertexLighting = half3(0,0,0);
                 inputData.bakedGI        = half3(0,0,0);
                 inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(IN.positionCS);
-                inputData.shadowMask     = unity_ProbesOcclusion;
+                inputData.shadowMask     = half4(1, 1, 1, 1);
 
                 // URP PBR ライティング
                 half4 color = UniversalFragmentPBR(inputData, surfData);
@@ -155,6 +166,8 @@ Shader "MoonObserver/MoonSurface"
             HLSLPROGRAM
             #pragma vertex ShadowPassVertex
             #pragma fragment ShadowPassFragment
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
             ENDHLSL
         }
@@ -167,6 +180,8 @@ Shader "MoonObserver/MoonSurface"
             HLSLPROGRAM
             #pragma vertex DepthOnlyVertex
             #pragma fragment DepthOnlyFragment
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
             ENDHLSL
         }
