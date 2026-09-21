@@ -54,9 +54,9 @@ public static class MoonSceneBuilder
         meshRenderer.material = moonSurfaceMat;
         var moonRendererComp = moonGO.AddComponent<MoonRenderer>();
         moonRendererComp.moonMaterial       = moonSurfaceMat;
-        moonRendererComp.placementDistanceM = 1000f;
+        moonRendererComp.placementDistanceM = 600f; // 星球 (800m) より手前
         moonRendererComp.sunLight           = sunLight;
-        moonGO.transform.position = new Vector3(0f, 0f, 1000f);
+        moonGO.transform.position = new Vector3(0f, 0f, 600f);
 
         // テクスチャを自動割り当て
         AutoAssignTextures(moonRendererComp);
@@ -160,8 +160,9 @@ public static class MoonSceneBuilder
         // Main Camera
         var camGO = new GameObject("Main Camera");
         camGO.transform.SetParent(camOffsetGO.transform, false);
-        vrCamera     = camGO.AddComponent<Camera>();
-        vrCamera.tag = "MainCamera";
+        vrCamera              = camGO.AddComponent<Camera>();
+        vrCamera.tag          = "MainCamera";
+        vrCamera.farClipPlane = 2000f; // 星球 (800m) + 月 (600m) を余裕でカバー
         camGO.AddComponent<AudioListener>();
 
         // Head tracking (Input System)

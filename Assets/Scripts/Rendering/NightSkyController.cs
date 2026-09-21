@@ -10,14 +10,14 @@ namespace MoonObserver.Rendering
     public class NightSkyController : MonoBehaviour
     {
         [Header("夜空の色")]
-        public Color skyColor     = new Color(0.00f, 0.00f, 0.02f);
-        public Color ambientColor = new Color(0.02f, 0.02f, 0.05f);
+        public Color skyColor     = new Color(0.02f, 0.02f, 0.06f); // 薄暗い夜空
+        public Color ambientColor = new Color(0.06f, 0.06f, 0.12f);
 
         [Header("星空")]
         [Range(500, 5000)]
         public int   starCount        = 2500;
-        [Range(2000f, 10000f)]
-        public float starSphereRadius = 8000f;
+        [Range(200f, 900f)]
+        public float starSphereRadius = 800f; // カメラ far clip (1000m) 以内
 
         [Header("月グロー")]
         public Light moonGlowLight;
@@ -48,6 +48,9 @@ namespace MoonObserver.Rendering
             {
                 cam.clearFlags      = CameraClearFlags.SolidColor;
                 cam.backgroundColor = skyColor;
+                // 星球が見えるよう far clip を拡張
+                if (cam.farClipPlane < starSphereRadius * 1.5f)
+                    cam.farClipPlane = starSphereRadius * 1.5f;
             }
         }
 
@@ -83,8 +86,8 @@ namespace MoonObserver.Rendering
                     right = Vector3.Cross(radial, Vector3.forward).normalized;
                 Vector3 up = Vector3.Cross(right, radial).normalized;
 
-                // 星のサイズ (明るい星ほど大きい)
-                float s = (float)(rng.NextDouble() * 16.0 + 6.0);
+                // 星のサイズ (半径 800m に合わせて 1.5〜5m)
+                float s = (float)(rng.NextDouble() * 3.5 + 1.5);
 
                 int vi = i * 4;
                 verts[vi + 0] = center + (-right - up) * s;
