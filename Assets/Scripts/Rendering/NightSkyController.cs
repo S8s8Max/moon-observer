@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 using MoonObserver.Astronomy;
@@ -6,24 +7,37 @@ namespace MoonObserver.Rendering
 {
     /// <summary>
     /// 夜空・星空・月グローを管理する。ParticleSystem に依存しないメッシュ実装。
+    /// 星は等級分布に従って生成し、恒星時に応じて天の北極まわりに日周回転させる。
     /// </summary>
     public class NightSkyController : MonoBehaviour
     {
         [Header("夜空の色")]
-        public Color skyColor     = new Color(0.01f, 0.03f, 0.10f); // 深い夜空 (暗すぎず黒すぎず)
+        public Color skyColor     = new Color(0.01f, 0.03f, 0.10f);
         public Color ambientColor = new Color(0.05f, 0.06f, 0.15f);
 
         [Header("星空")]
-        [Range(500, 5000)]
-        public int   starCount        = 2500;
+        [Range(500, 6000)]
+        public int   starCount        = 3000;
         [Range(200f, 900f)]
         public float starSphereRadius = 800f;
+        [Tooltip("最も暗い星の見かけサイズ (m)")]
+        public float minStarSize = 0.8f;
+        [Tooltip("最も明るい星の見かけサイズ (m)")]
+        public float maxStarSize = 4.5f;
+        [Tooltip("大きいほど暗い星の割合が増える (実際の星空は 3〜5 程度)")]
+        [Range(1f, 6f)]
+        public float magnitudeSkew = 4f;
+
+        [Header("日周回転")]
+        [Tooltip("恒星時に応じて星空を回転させる")]
+        public bool enableDiurnalRotation = true;
 
         [Header("月グロー")]
         public Light moonGlowLight;
 
         // ─────────────────────────────────────────────────────────────────
         private static readonly Color COLOR_HORIZON = new Color(1.0f, 0.3f, 0.05f);
+        private Transform _starField;
 
         private void Start()
         {
@@ -39,7 +53,6 @@ namespace MoonObserver.Rendering
             RenderSettings.fog          = false;
             RenderSettings.skybox       = null;
 
-            // メインカメラだけ背景色を設定
             var cam = Camera.main;
             if (cam != null)
             {
@@ -50,11 +63,12 @@ namespace MoonObserver.Rendering
             }
         }
 
-        // ── メッシュベース星フィールド (ParticleSystem 不要) ────────────
+        // ── メッシュベース星フィールド ──────────────────────────────────
         private void GenerateStarField()
         {
             var starGO = new GameObject("Star Field");
             starGO.transform.SetParent(transform, false);
+            _starField = starGO.transform;
 
             int count   = starCount;
             var verts   = new Vector3[count * 4];
@@ -67,42 +81,47 @@ namespace MoonObserver.Rendering
 
             for (int i = 0; i < count; i++)
             {
-                // 球面上のランダム点
-                float theta = (float)(rng.NextDouble() * 2.0 * System.Math.PI);
+                // 球面上の一様ランダム点
+                float theta = (float)(rng.NextDouble() * 2.0 * Math.PI);
                 float phi   = Mathf.Acos((float)(2.0 * rng.NextDouble() - 1.0));
                 Vector3 center = new Vector3(
                     Mathf.Sin(phi) * Mathf.Cos(theta),
                     Mathf.Sin(phi) * Mathf.Sin(theta),
                     Mathf.Cos(phi)) * r;
 
-                // TBN フレームで内向きクワッドを作る
+                // 内向きクワッドの TBN
                 Vector3 radial = center.normalized;
                 Vector3 right  = Vector3.Cross(radial, Vector3.up).normalized;
                 if (right.sqrMagnitude < 0.01f)
                     right = Vector3.Cross(radial, Vector3.forward).normalized;
                 Vector3 up = Vector3.Cross(right, radial).normalized;
 
-                // サイズ: 800m 球に合わせて 2〜6m
-                float s = (float)(rng.NextDouble() * 4.0 + 2.0);
+                // ── 等級分布 ──────────────────────────────────────────
+                // 実際の星空は等級が 1 下がるごとに星数が約 3 倍になる。
+                // u^skew で暗い星を圧倒的多数にし、明るい星を少数に絞る。
+                float u          = (float)rng.NextDouble();
+                float brightness = Mathf.Lerp(0.07f, 1.0f, Mathf.Pow(u, magnitudeSkew));
+
+                // 明るい星ほど大きく見える (グレア効果)
+                float size = Mathf.Lerp(minStarSize, maxStarSize, brightness * brightness);
 
                 int vi = i * 4;
-                verts[vi + 0] = center + (-right - up) * s;
-                verts[vi + 1] = center + ( right - up) * s;
-                verts[vi + 2] = center + ( right + up) * s;
-                verts[vi + 3] = center + (-right + up) * s;
+                verts[vi + 0] = center + (-right - up) * size;
+                verts[vi + 1] = center + ( right - up) * size;
+                verts[vi + 2] = center + ( right + up) * size;
+                verts[vi + 3] = center + (-right + up) * size;
 
                 uvs[vi + 0] = new Vector2(0f, 0f);
                 uvs[vi + 1] = new Vector2(1f, 0f);
                 uvs[vi + 2] = new Vector2(1f, 1f);
                 uvs[vi + 3] = new Vector2(0f, 1f);
 
-                // 白〜青白のランダム色 (やや明るめに)
-                float bri      = (float)(rng.NextDouble() * 0.5 + 0.5); // 0.5〜1.0
-                float blueShift = (float)(rng.NextDouble() * 0.2);
-                var c = new Color(bri, bri, Mathf.Min(1f, bri + blueShift), 1f);
+                Color c = ComputeStarColor(rng, brightness);
+                // alpha は瞬きの位相としてシェーダーへ渡す (加算合成なので混色には影響しない)
+                c.a = (float)rng.NextDouble();
                 cols[vi] = cols[vi+1] = cols[vi+2] = cols[vi+3] = c;
 
-                // 内側向き三角形 (カメラは球内部にいる)
+                // 内側向き三角形
                 int ti = i * 6;
                 indices[ti + 0] = vi;
                 indices[ti + 1] = vi + 2;
@@ -113,7 +132,7 @@ namespace MoonObserver.Rendering
             }
 
             var mesh = new Mesh { name = "Stars" };
-            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.indexFormat = IndexFormat.UInt32;
             mesh.vertices    = verts;
             mesh.colors      = cols;
             mesh.uv          = uvs;
@@ -122,30 +141,95 @@ namespace MoonObserver.Rendering
 
             var mf = starGO.AddComponent<MeshFilter>();
             var mr = starGO.AddComponent<MeshRenderer>();
-            mf.sharedMesh  = mesh;
+            mf.sharedMesh = mesh;
+
             var mat = CreateStarMaterial();
-            if (mat != null)
-                mr.sharedMaterial = mat;
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (mat != null) mr.sharedMaterial = mat;
+            mr.shadowCastingMode = ShadowCastingMode.Off;
             mr.receiveShadows    = false;
+        }
+
+        /// <summary>スペクトル型の分布に基づく星の色を返す。</summary>
+        private Color ComputeStarColor(System.Random rng, float brightness)
+        {
+            float t = (float)rng.NextDouble();
+            Color c;
+            if      (t < 0.10f) c = new Color(0.70f, 0.80f, 1.00f); // O/B 青白
+            else if (t < 0.38f) c = new Color(0.94f, 0.97f, 1.00f); // A   白
+            else if (t < 0.70f) c = new Color(1.00f, 0.98f, 0.91f); // F/G 黄白
+            else if (t < 0.90f) c = new Color(1.00f, 0.88f, 0.74f); // K   橙
+            else                c = new Color(1.00f, 0.76f, 0.60f); // M   赤橙
+
+            // 暗い星は暗所視で色が判別できないため白へ寄せる
+            float sat = Mathf.Clamp01(brightness * 1.4f);
+            c = Color.Lerp(Color.white, c, sat);
+
+            return new Color(c.r * brightness, c.g * brightness, c.b * brightness, 1f);
         }
 
         private Material CreateStarMaterial()
         {
-            // 専用の頂点カラー対応シェーダーを優先して使う
             var shader = Shader.Find("MoonObserver/StarField");
             if (shader == null)
             {
-                Debug.LogWarning("[NightSkyController] MoonObserver/StarField シェーダーが見つかりません。" +
-                                 "Assets/Shaders/StarField.shader をインポートしてください。");
+                Debug.LogWarning("[NightSkyController] MoonObserver/StarField シェーダーが見つかりません。");
                 return null;
             }
-            var mat = new Material(shader);
-            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            return mat;
+            return new Material(shader);
         }
 
-        // ── 月グロー更新 (VRMoonViewer から呼ぶ) ────────────────────────
+        // ── 日周回転 (VRMoonViewer から時刻更新時に呼ぶ) ─────────────────
+        /// <summary>
+        /// 恒星時に応じて星空を天の北極まわりに回転させる。
+        /// 天の北極は「方位角 0 (北)・高度 = 観測地緯度」の方向にある。
+        /// </summary>
+        public void UpdateStarRotation(DateTime utc, double latitudeDeg, double longitudeDeg)
+        {
+            if (!enableDiurnalRotation || _starField == null) return;
+
+            double lst    = LocalSiderealTimeDeg(utc, longitudeDeg);
+            float  latRad = (float)(latitudeDeg * Mathf.Deg2Rad);
+
+            Vector3 poleAxis = new Vector3(0f, Mathf.Sin(latRad), Mathf.Cos(latRad));
+
+            // 地球は東向きに自転するため、星は西向き (極を見て反時計回り) に動く
+            _starField.rotation = Quaternion.AngleAxis(-(float)lst, poleAxis);
+        }
+
+        /// <summary>地方恒星時 (度) を返す。</summary>
+        private static double LocalSiderealTimeDeg(DateTime utc, double longitudeDeg)
+        {
+            double jd  = ToJulianDate(utc);
+            double d   = jd - 2451545.0;
+            double gmst = 280.46061837 + 360.98564736629 * d;
+            return NormalizeDeg(gmst + longitudeDeg);
+        }
+
+        private static double ToJulianDate(DateTime utc)
+        {
+            int    y = utc.Year, m = utc.Month;
+            double day = utc.Day
+                       + utc.Hour   / 24.0
+                       + utc.Minute / 1440.0
+                       + utc.Second / 86400.0;
+
+            if (m <= 2) { y -= 1; m += 12; }
+
+            int a = y / 100;
+            int b = 2 - a + a / 4;
+
+            return Math.Floor(365.25 * (y + 4716))
+                 + Math.Floor(30.6001 * (m + 1))
+                 + day + b - 1524.5;
+        }
+
+        private static double NormalizeDeg(double deg)
+        {
+            deg %= 360.0;
+            return deg < 0 ? deg + 360.0 : deg;
+        }
+
+        // ── 月グロー更新 ────────────────────────────────────────────────
         public void UpdateAtmosphere(MoonState state, Color moonColor)
         {
             if (moonGlowLight == null) return;

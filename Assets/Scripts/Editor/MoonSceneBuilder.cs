@@ -94,9 +94,14 @@ public static class MoonSceneBuilder
         var nightSkyCon = nightSkyGO.AddComponent<NightSkyController>();
         nightSkyCon.moonGlowLight = glowLight;
 
-        // ── 5c. Horizon Reference (地平線グリッド + 方位 N/E/S/W) ────────
+        // ── 5c. Horizon Reference (地上グリッド + 方位 N/E/S/W) ──────────
         var horizonGO = new GameObject("Horizon Reference");
         horizonGO.AddComponent<HorizonReference>();
+
+        // ── 5d. Moon Path (月の日周軌道) ─────────────────────────────────
+        var pathGO   = new GameObject("Moon Path Renderer");
+        var moonPath = pathGO.AddComponent<MoonPathRenderer>();
+        moonPath.pathDistance = moonRendererComp.placementDistanceM;
 
         // ── 6. UI Canvas ─────────────────────────────────────────────────
         var canvasGO = new GameObject("UI Canvas");
@@ -137,6 +142,13 @@ public static class MoonSceneBuilder
         viewer.illuminationText   = illumText;
         viewer.distanceText       = distText;
         viewer.currentTimeText    = timeText;
+        viewer.nightSky           = nightSkyCon;
+        viewer.moonPath           = moonPath;
+
+        // ── 7b. 時刻スクラブ UI ──────────────────────────────────────────
+        var scrubberGO = new GameObject("Time Scrubber");
+        var scrubber   = scrubberGO.AddComponent<TimeScrubberUI>();
+        scrubber.viewer = viewer;
 
         // ── 8. Moon Direction Indicator ──────────────────────────────────
         var indicatorGO = new GameObject("Moon Direction Indicator Host");
@@ -165,8 +177,9 @@ public static class MoonSceneBuilder
             $"シーンを作成しました: {scenePath}\n\n" +
             "▶ Play で即実行できます。\n\n" +
             "【PC 操作方法】\n" +
-            "・Game ビューをクリック → カーソルロック → マウス移動で視点回転\n" +
-            "・Escape キー → カーソルロック解除\n" +
+            "・右クリック長押し + マウス移動 → 視点回転\n" +
+            "・画面下部のスライダーをドラッグ → 時刻を前後に変更\n" +
+            "・Now ボタン → 現在時刻へ戻る\n" +
             "・← → 矢印キー → 時刻スクロール\n" +
             "・F キー → 情報パネル表示/非表示\n" +
             "・R キー → 現在時刻にリセット",
@@ -346,6 +359,7 @@ public static class MoonSceneBuilder
             "MoonObserver/MoonSurface",
             "MoonObserver/MoonAtmosphere",
             "MoonObserver/StarField",
+            "MoonObserver/VertexColorLine",
         };
 
         int errorCount = 0;

@@ -39,6 +39,10 @@ namespace MoonObserver.VR
         [Header("方向インジケーター")]
         public MoonDirectionIndicator moonIndicator;
 
+        [Header("夜空・軌道")]
+        public Rendering.NightSkyController nightSky;
+        public Rendering.MoonPathRenderer   moonPath;
+
         [Header("UI パネル")]
         public GameObject infoPanel;
         public TextMeshProUGUI altitudeText;
@@ -58,10 +62,16 @@ namespace MoonObserver.VR
         // 内部状態
         // ─────────────────────────────────────────────────────────────────────
         private DateTime  _currentUtc;
+        private DateTime  _anchorUtc;   // スクラブの基準時刻
         private MoonState _moonState;
         private float     _updateTimer;
         private bool      _infoPanelVisible = false;
         private bool      _illusionEnabled  = true;
+        private DateTime  _lastPathUtc = DateTime.MinValue;
+
+        // ── 外部 (時刻スクラブ UI など) から参照する状態 ──────────────────
+        public DateTime CurrentUtc => _currentUtc;
+        public bool     IsRealTime => useRealTime;
 
         // Input System アクション (new InputAction() で直接生成)
         private InputAction _rightStickAction;
@@ -73,7 +83,29 @@ namespace MoonObserver.VR
         private void Awake()
         {
             _currentUtc = useRealTime ? DateTime.UtcNow : ParseManualTime();
+            _anchorUtc  = _currentUtc;
             InitializeInputActions();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // 時刻スクラブ API (TimeScrubberUI から呼ぶ)
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>基準時刻からの相対時間 (h) で表示時刻を設定する。</summary>
+        public void SetTimeOffsetHours(double hours)
+        {
+            useRealTime = false;
+            _currentUtc = _anchorUtc.AddHours(hours);
+            UpdateMoonState();
+        }
+
+        /// <summary>現在時刻へ戻し、リアルタイム追従を再開する。</summary>
+        public void ResetToNow()
+        {
+            _anchorUtc  = DateTime.UtcNow;
+            _currentUtc = _anchorUtc;
+            useRealTime = true;
+            UpdateMoonState();
         }
 
         private void Start()
@@ -176,6 +208,26 @@ namespace MoonObserver.VR
             SetMoonTransformPosition();
             UpdateInfoUI();
             moonIndicator?.SetMoonState(_moonState);
+
+            // 星空を恒星時に合わせて日周回転させる
+            nightSky?.UpdateStarRotation(_currentUtc, latitudeDeg, longitudeDeg);
+
+            UpdateMoonPath();
+        }
+
+        /// <summary>
+        /// 月の軌道線を更新する。1 回の再構築で数百回の天文計算が走るため、
+        /// 表示時刻が 3 時間以上ずれたときだけ作り直す
+        /// (月の軌道は数時間ではほとんど変化しないので見た目に影響しない)。
+        /// </summary>
+        private void UpdateMoonPath()
+        {
+            if (moonPath == null) return;
+
+            if (Math.Abs((_currentUtc - _lastPathUtc).TotalHours) < 3.0) return;
+
+            _lastPathUtc = _currentUtc;
+            moonPath.Rebuild(_currentUtc, latitudeDeg, longitudeDeg);
         }
 
         private void SetMoonTransformPosition()

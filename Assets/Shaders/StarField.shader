@@ -1,22 +1,27 @@
-// 星空メッシュ用シェーダー — 頂点カラーで各星の輝度を表現
+// 星空メッシュ用シェーダー — 頂点カラーで輝度・色温度、頂点カラー alpha で瞬きの位相を渡す
 // URP 17 / Unity 6 / Metal 対応
 //
-// 重要: CBUFFER_START(UnityPerMaterial) 内は float / float4 のみ (Metal 互換)
+// 実際の星は「鋭い芯 + 淡く広がるハロー」に見える。単純な円形グラデーションでは
+// ぼやけた塊になってしまうため、芯とハローを別々の指数カーブで合成する。
 Shader "MoonObserver/StarField"
 {
     Properties
     {
-        _Brightness ("Brightness", Range(0.5, 4)) = 1.6
+        _Brightness  ("Brightness", Range(0.5, 4))       = 1.5
+        _CoreSharp   ("Core Sharpness", Range(2, 16))    = 7.0
+        _HaloStrength("Halo Strength", Range(0, 0.5))    = 0.10
+        _Twinkle     ("Twinkle Amount", Range(0, 0.5))   = 0.12
+        _TwinkleSpeed("Twinkle Speed", Range(0, 8))      = 2.5
     }
 
     SubShader
     {
         Tags
         {
-            "RenderType"     = "Transparent"
-            "Queue"          = "Transparent"
-            "RenderPipeline" = "UniversalPipeline"
-            "IgnoreProjector"= "True"
+            "RenderType"      = "Transparent"
+            "Queue"           = "Transparent"
+            "RenderPipeline"  = "UniversalPipeline"
+            "IgnoreProjector" = "True"
         }
 
         Pass
@@ -26,7 +31,7 @@ Shader "MoonObserver/StarField"
 
             ZWrite Off
             ZTest  LEqual
-            Blend  One One       // 加算合成 — 星らしい光
+            Blend  One One       // 加算合成
             Cull   Off
 
             HLSLPROGRAM
@@ -37,13 +42,17 @@ Shader "MoonObserver/StarField"
 
             CBUFFER_START(UnityPerMaterial)
                 float _Brightness;
+                float _CoreSharp;
+                float _HaloStrength;
+                float _Twinkle;
+                float _TwinkleSpeed;
             CBUFFER_END
 
             struct Attributes
             {
                 float4 posOS : POSITION;
                 float2 uv    : TEXCOORD0;
-                float4 color : COLOR;
+                float4 color : COLOR;   // rgb = 輝度込みの色 / a = 瞬きの位相 (0-1)
             };
 
             struct Varyings
@@ -64,13 +73,22 @@ Shader "MoonObserver/StarField"
 
             float4 Frag(Varyings IN) : SV_Target
             {
-                // UV(0-1) を中心基準に変換して円形グラデーションを作る
-                float2 d  = IN.uv - 0.5;
-                float  r2 = dot(d, d) * 4.0;      // 中心=0, 端=1
-                float  a  = saturate(1.0 - r2);
-                a = a * a;                         // 中心を引き締める
+                // 中心からの距離 (0 = 中心, 1 = クワッドの辺)
+                float2 d = IN.uv - 0.5;
+                float  r = saturate(length(d) * 2.0);
+                float  falloff = saturate(1.0 - r);
 
-                float3 col = IN.color.rgb * a * _Brightness;
+                // 鋭い芯 + 淡いハロー
+                float core = pow(falloff, _CoreSharp);
+                float halo = pow(falloff, 1.5) * _HaloStrength;
+                float i    = core + halo;
+
+                // 大気によるシンチレーション (星ごとに位相をずらす)
+                float phase   = IN.color.a * 6.2831853;
+                float twinkle = 1.0 - _Twinkle
+                              + _Twinkle * sin(_Time.y * _TwinkleSpeed + phase);
+
+                float3 col = IN.color.rgb * i * twinkle * _Brightness;
                 return float4(col, 1.0);
             }
             ENDHLSL
