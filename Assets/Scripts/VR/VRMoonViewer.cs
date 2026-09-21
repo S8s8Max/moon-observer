@@ -43,6 +43,10 @@ namespace MoonObserver.VR
         public Rendering.NightSkyController nightSky;
         public Rendering.MoonPathRenderer   moonPath;
 
+        [Header("現在地・天候")]
+        public LocationService locationService;
+        public WeatherService  weatherService;
+
         [Header("UI パネル")]
         public GameObject infoPanel;
         public TextMeshProUGUI altitudeText;
@@ -51,6 +55,8 @@ namespace MoonObserver.VR
         public TextMeshProUGUI illuminationText;
         public TextMeshProUGUI distanceText;
         public TextMeshProUGUI currentTimeText;
+        public TextMeshProUGUI locationText;
+        public TextMeshProUGUI weatherText;
 
         // ─────────────────────────────────────────────────────────────────────
         // 定数
@@ -106,6 +112,21 @@ namespace MoonObserver.VR
             _currentUtc = _anchorUtc;
             useRealTime = true;
             UpdateMoonState();
+        }
+
+        /// <summary>
+        /// LocationService が観測地点を確定したときに呼ばれる。
+        /// 緯度経度が変わると月の軌道も星空も変わるため全て作り直す。
+        /// </summary>
+        public void OnLocationChanged()
+        {
+            _lastPathUtc = DateTime.MinValue; // 軌道を強制的に再構築させる
+            UpdateMoonState();
+
+            // コルーチンは WeatherService 自身に持たせる
+            // (VRMoonViewer が無効化されても天気取得が止まらないようにするため)
+            if (weatherService != null && weatherService.isActiveAndEnabled)
+                weatherService.StartCoroutine(weatherService.Fetch());
         }
 
         private void Start()
@@ -192,12 +213,23 @@ namespace MoonObserver.VR
                 ? atmosphericEffects.ComputeAtmosphericColor(alt)
                 : Color.white;
 
+            // 天候 (雲・もや) による減光を大気減光に重ねる
+            float transmittance = weatherService != null ? weatherService.Transmittance : 1f;
+            atmColor = new Color(atmColor.r * transmittance,
+                                 atmColor.g * transmittance,
+                                 atmColor.b * transmittance);
+
             float illusionScale = atmosphericEffects != null
                 ? atmosphericEffects.ComputeIllusionScale(alt)
                 : 1.0f;
 
             if (moonRenderer != null)
+            {
                 moonRenderer.UpdateMoon(_moonState, illusionScale);
+                moonRenderer.ApplyAtmosphericTint(atmColor);
+            }
+
+            nightSky?.SetTransmittance(transmittance);
 
             if (atmosphericEffects != null)
                 atmosphericEffects.ApplyToShader(alt);
@@ -262,6 +294,21 @@ namespace MoonObserver.VR
             if (illuminationText) illuminationText.text = $"Illumin:   {_moonState.IlluminationFraction * 100:F1}%";
             if (distanceText)     distanceText.text     = $"Distance:  {_moonState.DistanceKm:F0} km";
             if (currentTimeText)  currentTimeText.text  = $"Time (JST): {jst:yyyy-MM-dd HH:mm}";
+
+            if (locationText)
+            {
+                string place = locationService != null && locationService.HasResolved
+                    ? locationService.resolvedPlaceName
+                    : "Manual";
+                locationText.text = $"Site:      {place} ({latitudeDeg:F2}, {longitudeDeg:F2})";
+            }
+
+            if (weatherText)
+            {
+                weatherText.text = weatherService != null && weatherService.HasData
+                    ? $"Weather:   {weatherService.conditionText}, cloud {weatherService.cloudCover01 * 100f:F0}%, {weatherService.temperatureC:F0}C"
+                    : "Weather:   (no data)";
+            }
         }
 
         private void ToggleInfoPanel()

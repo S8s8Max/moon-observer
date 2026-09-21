@@ -110,24 +110,26 @@ public static class MoonSceneBuilder
         canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
         canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
         var canvasRT = canvasGO.GetComponent<RectTransform>();
-        canvasRT.sizeDelta          = new Vector2(500, 400);
+        canvasRT.sizeDelta          = new Vector2(560, 500);
         canvasGO.transform.position   = new Vector3(0f, 1.6f, 2.5f);
         canvasGO.transform.localScale = Vector3.one * 0.001f;
 
         var panelGO    = new GameObject("Info Panel");
         panelGO.transform.SetParent(canvasGO.transform, false);
         var panelRect  = panelGO.AddComponent<RectTransform>();
-        panelRect.sizeDelta = new Vector2(500, 400);
+        panelRect.sizeDelta = new Vector2(560, 500);
         var panelImage = panelGO.AddComponent<UnityEngine.UI.Image>();
         panelImage.color = new Color(0f, 0f, 0f, 0.75f);
         panelGO.SetActive(false);
 
-        var altText   = CreateText(panelGO, "Altitude Text",     new Vector2(0,  140));
-        var azText    = CreateText(panelGO, "Azimuth Text",      new Vector2(0,   90));
-        var ageText   = CreateText(panelGO, "Moon Age Text",     new Vector2(0,   40));
-        var illumText = CreateText(panelGO, "Illumination Text", new Vector2(0,  -10));
-        var distText  = CreateText(panelGO, "Distance Text",     new Vector2(0,  -60));
-        var timeText  = CreateText(panelGO, "Current Time Text", new Vector2(0, -110));
+        var altText   = CreateText(panelGO, "Altitude Text",     new Vector2(0,  170));
+        var azText    = CreateText(panelGO, "Azimuth Text",      new Vector2(0,  120));
+        var ageText   = CreateText(panelGO, "Moon Age Text",     new Vector2(0,   70));
+        var illumText = CreateText(panelGO, "Illumination Text", new Vector2(0,   20));
+        var distText  = CreateText(panelGO, "Distance Text",     new Vector2(0,  -30));
+        var timeText  = CreateText(panelGO, "Current Time Text", new Vector2(0,  -80));
+        var locText   = CreateText(panelGO, "Location Text",     new Vector2(0, -130));
+        var wxText    = CreateText(panelGO, "Weather Text",      new Vector2(0, -180));
 
         // ── 7. VRMoonViewer ──────────────────────────────────────────────
         var viewerGO = new GameObject("VRMoonViewer");
@@ -142,8 +144,19 @@ public static class MoonSceneBuilder
         viewer.illuminationText   = illumText;
         viewer.distanceText       = distText;
         viewer.currentTimeText    = timeText;
+        viewer.locationText       = locText;
+        viewer.weatherText        = wxText;
         viewer.nightSky           = nightSkyCon;
         viewer.moonPath           = moonPath;
+
+        // ── 7a. 現在地 (IP 測位) と天気 (Open-Meteo) ─────────────────────
+        var servicesGO = new GameObject("Location & Weather");
+        var location   = servicesGO.AddComponent<LocationService>();
+        var weather    = servicesGO.AddComponent<WeatherService>();
+        location.moonViewer = viewer;
+        weather.moonViewer  = viewer;
+        viewer.locationService = location;
+        viewer.weatherService  = weather;
 
         // ── 7b. 時刻スクラブ UI ──────────────────────────────────────────
         var scrubberGO = new GameObject("Time Scrubber");

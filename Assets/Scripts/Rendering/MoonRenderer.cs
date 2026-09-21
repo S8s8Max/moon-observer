@@ -43,7 +43,15 @@ namespace MoonObserver.Rendering
         // 内部状態
         // ─────────────────────────────────────────────────────────────────────
         private MeshRenderer _meshRenderer;
+        private Material    _instanceMaterial;
         private float _baseRadiusM; // VR空間でのベース半径 (m)
+
+        /// <summary>大気減光・天候による色フィルタを月面へ適用する。</summary>
+        public void ApplyAtmosphericTint(Color tint)
+        {
+            if (_instanceMaterial != null && _instanceMaterial.HasProperty("_AtmosphericTint"))
+                _instanceMaterial.SetColor("_AtmosphericTint", tint);
+        }
 
         private void Awake()
         {
@@ -54,6 +62,7 @@ namespace MoonObserver.Rendering
                 // テクスチャはアセットではなくインスタンス側へ設定する
                 _meshRenderer.material = moonMaterial;
                 var mat = _meshRenderer.material;
+                _instanceMaterial = mat;
 
                 if (colorMap != null)
                     mat.SetTexture("_BaseMap", colorMap);

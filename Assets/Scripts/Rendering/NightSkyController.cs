@@ -35,9 +35,31 @@ namespace MoonObserver.Rendering
         [Header("月グロー")]
         public Light moonGlowLight;
 
+        [Header("天候")]
+        [Tooltip("全天曇りのときの空の色。雲が地上の光を反射して空は明るくなる")]
+        public Color overcastSkyColor = new Color(0.07f, 0.08f, 0.13f);
+
         // ─────────────────────────────────────────────────────────────────
         private static readonly Color COLOR_HORIZON = new Color(1.0f, 0.3f, 0.05f);
         private Transform _starField;
+        private Material  _starMaterial;
+        private float     _baseStarBrightness = 1.5f;
+
+        /// <summary>
+        /// 天候による大気透過率 (0-1) を星空へ反映する。
+        /// 星を暗くすると同時に、雲が地上光を反射して空自体は明るくなる。
+        /// </summary>
+        public void SetTransmittance(float transmittance)
+        {
+            transmittance = Mathf.Clamp01(transmittance);
+
+            if (_starMaterial != null && _starMaterial.HasProperty("_Brightness"))
+                _starMaterial.SetFloat("_Brightness", _baseStarBrightness * transmittance);
+
+            var cam = Camera.main;
+            if (cam != null)
+                cam.backgroundColor = Color.Lerp(overcastSkyColor, skyColor, transmittance);
+        }
 
         private void Start()
         {
@@ -144,7 +166,13 @@ namespace MoonObserver.Rendering
             mf.sharedMesh = mesh;
 
             var mat = CreateStarMaterial();
-            if (mat != null) mr.sharedMaterial = mat;
+            if (mat != null)
+            {
+                mr.sharedMaterial = mat;
+                _starMaterial = mat;
+                if (mat.HasProperty("_Brightness"))
+                    _baseStarBrightness = mat.GetFloat("_Brightness");
+            }
             mr.shadowCastingMode = ShadowCastingMode.Off;
             mr.receiveShadows    = false;
         }
