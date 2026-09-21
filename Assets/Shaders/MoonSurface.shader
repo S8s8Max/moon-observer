@@ -1,35 +1,28 @@
-// URP 14.x 月面マテリアルシェーダー
-// NASA CGI Moon Kit テクスチャを使用した物理ベースのレンダリング
+// シンプルなランバート拡散+法線マップ月面シェーダー
+// 複雑な URP PBR を避けて確実にコンパイルされる実装
 Shader "MoonObserver/MoonSurface"
 {
     Properties
     {
         [MainTexture]
-        _BaseMap        ("Color Map (NASA LROC)", 2D)   = "white" {}
+        _BaseMap        ("Color Map (NASA LROC)", 2D)         = "gray" {}
         [Normal]
-        _BumpMap        ("Normal Map", 2D)              = "bump" {}
-        _BumpScale      ("Normal Scale", Float)         = 1.0
-        _Smoothness     ("Smoothness", Range(0,1))      = 0.05
-        _Metallic       ("Metallic", Range(0,1))        = 0.0
-        _OcclusionMap   ("Occlusion Map", 2D)           = "white" {}
-        _OcclusionStrength("Occlusion Strength", Range(0,1)) = 0.5
-
-        // 大気色ティント (AtmosphericEffects から更新)
-        _AtmosphericTint("Atmospheric Tint", Color)     = (1,1,1,1)
-        // 満ち欠けマスク: 位相角から CPU で更新
-        _PhaseAngle     ("Phase Angle (deg)", Float)    = 0.0
-        _EnablePhase    ("Enable Phase Mask", Float)    = 0.0
+        _BumpMap        ("Normal Map", 2D)                    = "bump" {}
+        _BumpScale      ("Normal Scale", Float)               = 1.0
+        _AtmosphericTint("Atmospheric Tint", Color)           = (1,1,1,1)
+        _AmbientMin     ("Ambient (dark side)", Range(0,0.3)) = 0.04
     }
 
     SubShader
     {
         Tags
         {
-            "RenderType" = "Opaque"
+            "RenderType"    = "Opaque"
             "RenderPipeline" = "UniversalPipeline"
+            "Queue"         = "Geometry"
         }
-        LOD 300
 
+        // ── ForwardLit ──────────────────────────────────────────────────
         Pass
         {
             Name "ForwardLit"
@@ -38,27 +31,19 @@ Shader "MoonObserver/MoonSurface"
             HLSLPROGRAM
             #pragma vertex   Vert
             #pragma fragment Frag
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #pragma multi_compile _ _SHADOWS_SOFT
-            #pragma multi_compile_fog
-            #pragma multi_compile _ REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            TEXTURE2D(_BaseMap);     SAMPLER(sampler_BaseMap);
-            TEXTURE2D(_BumpMap);     SAMPLER(sampler_BumpMap);
-            TEXTURE2D(_OcclusionMap);SAMPLER(sampler_OcclusionMap);
+            TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_BumpMap); SAMPLER(sampler_BumpMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
                 float  _BumpScale;
-                float  _Smoothness;
-                float  _Metallic;
-                float  _OcclusionStrength;
                 float4 _AtmosphericTint;
-                float  _PhaseAngle;
-                float  _EnablePhase;
+                float  _AmbientMin;
             CBUFFER_END
 
             struct Attributes
@@ -74,13 +59,9 @@ Shader "MoonObserver/MoonSurface"
             {
                 float4 positionCS  : SV_POSITION;
                 float2 uv          : TEXCOORD0;
-                float3 positionWS  : TEXCOORD1;
-                float3 normalWS    : TEXCOORD2;
-                float3 tangentWS   : TEXCOORD3;
-                float3 bitangentWS : TEXCOORD4;
-                #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
-                    float4 shadowCoord : TEXCOORD5;
-                #endif
+                float3 normalWS    : TEXCOORD1;
+                float3 tangentWS   : TEXCOORD2;
+                float3 bitangentWS : TEXCOORD3;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -90,99 +71,73 @@ Shader "MoonObserver/MoonSurface"
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
 
-                VertexPositionInputs posInputs = GetVertexPositionInputs(IN.positionOS.xyz);
+                VertexPositionInputs posInputs  = GetVertexPositionInputs(IN.positionOS.xyz);
                 VertexNormalInputs   normInputs = GetVertexNormalInputs(IN.normalOS, IN.tangentOS);
 
                 OUT.positionCS  = posInputs.positionCS;
-                OUT.positionWS  = posInputs.positionWS;
+                OUT.uv          = TRANSFORM_TEX(IN.uv, _BaseMap);
                 OUT.normalWS    = normInputs.normalWS;
                 OUT.tangentWS   = normInputs.tangentWS;
                 OUT.bitangentWS = normInputs.bitangentWS;
-                OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
-                #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
-                    OUT.shadowCoord = GetShadowCoord(posInputs);
-                #endif
                 return OUT;
             }
 
             half4 Frag(Varyings IN) : SV_Target
             {
-                // テクスチャ
+                // テクスチャ (NASA テクスチャがなければグレー)
                 float4 baseColor = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv);
-                float3 normalTS  = UnpackNormalScale(
-                    SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, IN.uv), _BumpScale);
-                float occlusion  = lerp(1.0,
-                    SAMPLE_TEXTURE2D(_OcclusionMap, sampler_OcclusionMap, IN.uv).r,
-                    _OcclusionStrength);
 
-                // TBN → ワールド法線
-                float3x3 TBN = float3x3(IN.tangentWS, IN.bitangentWS, IN.normalWS);
+                // 法線マップ
+                float3 normalTS = UnpackNormalScale(
+                    SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, IN.uv), _BumpScale);
+                float3x3 TBN    = float3x3(IN.tangentWS, IN.bitangentWS, IN.normalWS);
                 float3 normalWS = normalize(mul(normalTS, TBN));
 
-                // PBR 入力構造体
-                SurfaceData surfData;
-                ZERO_INITIALIZE(SurfaceData, surfData);
-                surfData.albedo     = baseColor.rgb;
-                surfData.metallic   = _Metallic;
-                surfData.smoothness = _Smoothness;
-                surfData.normalTS   = normalTS;
-                surfData.occlusion  = occlusion;
-                surfData.alpha      = baseColor.a;
+                // ランバート拡散 + 最低輝度 (暗い側も真っ黒にならない)
+                Light mainLight = GetMainLight();
+                float NdotL = max(_AmbientMin, dot(normalWS, normalize(mainLight.direction)));
 
-                InputData inputData;
-                ZERO_INITIALIZE(InputData, inputData);
-                inputData.positionWS     = IN.positionWS;
-                inputData.normalWS       = normalWS;
-                inputData.viewDirectionWS = normalize(GetCameraPositionWS() - IN.positionWS);
-                #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
-                    inputData.shadowCoord = IN.shadowCoord;
-                #elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
-                    inputData.shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
-                #else
-                    inputData.shadowCoord = float4(0, 0, 0, 0);
-                #endif
-                inputData.fogCoord       = 0;
-                inputData.vertexLighting = half3(0,0,0);
-                inputData.bakedGI        = half3(0,0,0);
-                inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(IN.positionCS);
-                inputData.shadowMask     = half4(1, 1, 1, 1);
-
-                // URP PBR ライティング
-                half4 color = UniversalFragmentPBR(inputData, surfData);
-
-                // 大気色ティント (AtmosphericEffects から注入)
-                color.rgb *= _AtmosphericTint.rgb;
-
-                return color;
+                float3 color = baseColor.rgb * NdotL * mainLight.color.rgb * _AtmosphericTint.rgb;
+                return half4(color, 1.0);
             }
             ENDHLSL
         }
 
+        // ── ShadowCaster (最小実装) ────────────────────────────────────
         Pass
         {
             Name "ShadowCaster"
             Tags { "LightMode" = "ShadowCaster" }
-            ZWrite On ColorMask 0
-            HLSLPROGRAM
-            #pragma vertex ShadowPassVertex
-            #pragma fragment ShadowPassFragment
-            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
-            ENDHLSL
-        }
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
 
-        Pass
-        {
-            Name "DepthOnly"
-            Tags { "LightMode" = "DepthOnly" }
-            ZWrite On ColorMask 0
             HLSLPROGRAM
-            #pragma vertex DepthOnlyVertex
-            #pragma fragment DepthOnlyFragment
+            #pragma vertex   ShadowVert
+            #pragma fragment ShadowFrag
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+            float3 _LightDirection;
+            float3 _LightPosition;
+
+            struct ShadowAttr { float4 posOS : POSITION; float3 normOS : NORMAL; UNITY_VERTEX_INPUT_INSTANCE_ID };
+
+            float4 ShadowVert(ShadowAttr IN) : SV_POSITION
+            {
+                UNITY_SETUP_INSTANCE_ID(IN);
+                float3 posWS  = TransformObjectToWorld(IN.posOS.xyz);
+                float3 normWS = TransformObjectToWorldNormal(IN.normOS);
+                #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
+                    float3 ld = normalize(_LightPosition - posWS);
+                #else
+                    float3 ld = _LightDirection;
+                #endif
+                return ApplyShadowBias(TransformWorldToHClip(posWS), normWS, ld);
+            }
+            half4 ShadowFrag() : SV_Target { return 0; }
             ENDHLSL
         }
     }

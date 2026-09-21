@@ -69,6 +69,11 @@ public static class MoonSceneBuilder
         glowLight.color     = Color.white;
         glowGO.transform.position = Vector3.zero;
 
+        // ── 5b. Night Sky Controller (夜空・星空) ─────────────────────
+        var nightSkyGO  = new GameObject("Night Sky");
+        var nightSkyCon = nightSkyGO.AddComponent<NightSkyController>();
+        nightSkyCon.moonGlowLight = glowLight;
+
         // ── 6. UI Canvas (World Space 情報パネル) ──────────────────────
         var canvasGO = new GameObject("UI Canvas");
         var canvas   = canvasGO.AddComponent<Canvas>();
@@ -103,6 +108,7 @@ public static class MoonSceneBuilder
         viewer.moonRenderer        = moonRendererComp;
         viewer.moonTransform       = moonGO.transform;
         viewer.atmosphericEffects  = atmEffects;
+        // skyboxController は null のまま (NightSkyController が独立して夜空を管理)
         viewer.infoPanel           = panelGO;
         viewer.altitudeText        = altText;
         viewer.azimuthText         = azText;

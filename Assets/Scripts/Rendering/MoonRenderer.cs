@@ -25,6 +25,9 @@ namespace MoonObserver.Rendering
         [Header("スケール設定")]
         [Tooltip("VR空間内の月の配置距離 (m)")]
         public float placementDistanceM = 1000f;
+        [Tooltip("視覚スケール倍率 (1=実サイズ約0.5°、5=見やすい大きさ)")]
+        [Range(1f, 20f)]
+        public float visualScaleMultiplier = 5f;
 
         [Header("太陽ライト")]
         [Tooltip("Directional Light (太陽)")]
@@ -80,8 +83,8 @@ namespace MoonObserver.Rendering
             // VR空間での半径 = 距離 * tan(半視直径)
             _baseRadiusM = placementDistanceM * Mathf.Tan(moonAngularDiameterDeg * 0.5f * DEG2RAD);
 
-            // 月の錯覚スケール適用
-            float totalScale = _baseRadiusM * 2f * illusionScale;
+            // 月の錯覚スケール + 視覚倍率を適用
+            float totalScale = _baseRadiusM * 2f * illusionScale * visualScaleMultiplier;
             transform.localScale = Vector3.one * totalScale;
         }
 
