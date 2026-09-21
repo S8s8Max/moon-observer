@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
+using MoonObserver.UI;
 
 namespace MoonObserver.VR
 {
@@ -80,7 +81,8 @@ namespace MoonObserver.VR
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogWarning($"[WeatherService] 天気の取得に失敗しました ({req.error})。");
+                ObservationStatus.Report($"Weather unavailable ({req.error})",
+                                         ObservationStatus.Level.Warning);
                 yield break;
             }
 
@@ -88,13 +90,15 @@ namespace MoonObserver.VR
             try { data = JsonUtility.FromJson<OpenMeteoResponse>(req.downloadHandler.text); }
             catch (System.Exception e)
             {
-                Debug.LogWarning("[WeatherService] 天気の応答を解析できませんでした: " + e.Message);
+                ObservationStatus.Report($"Weather data unreadable ({e.Message})",
+                                         ObservationStatus.Level.Warning);
                 yield break;
             }
 
             if (data?.current == null)
             {
-                Debug.LogWarning("[WeatherService] 天気の応答に current が含まれていません。");
+                ObservationStatus.Report("Weather response had no current block",
+                                         ObservationStatus.Level.Warning);
                 yield break;
             }
 
@@ -104,9 +108,9 @@ namespace MoonObserver.VR
             conditionText = DescribeWeatherCode(data.current.weather_code);
             HasData       = true;
 
-            Debug.Log($"[WeatherService] {conditionText} / 雲量 {cloudCover01 * 100f:F0}% / " +
-                      $"湿度 {humidity01 * 100f:F0}% / {temperatureC:F1}℃ " +
-                      $"(透過率 {Transmittance * 100f:F0}%)");
+            ObservationStatus.Report(
+                $"Weather: {conditionText}, cloud {cloudCover01 * 100f:F0}%, {temperatureC:F0}°C",
+                ObservationStatus.Level.Success);
         }
 
         /// <summary>WMO 気象コードを短い英語表記に変換する。</summary>

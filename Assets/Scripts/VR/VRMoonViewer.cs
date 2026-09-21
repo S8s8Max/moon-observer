@@ -1,7 +1,6 @@
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using TMPro;
 using MoonObserver.Astronomy;
 using MoonObserver.Rendering;
 using MoonObserver.Atmospheric;
@@ -47,16 +46,8 @@ namespace MoonObserver.VR
         public ObserverLocationProvider locationService;
         public WeatherService  weatherService;
 
-        [Header("UI パネル")]
-        public GameObject infoPanel;
-        public TextMeshProUGUI altitudeText;
-        public TextMeshProUGUI azimuthText;
-        public TextMeshProUGUI moonAgeText;
-        public TextMeshProUGUI illuminationText;
-        public TextMeshProUGUI distanceText;
-        public TextMeshProUGUI currentTimeText;
-        public TextMeshProUGUI locationText;
-        public TextMeshProUGUI weatherText;
+        [Header("UI")]
+        public UI.ObservationHUD hud;
 
         // ─────────────────────────────────────────────────────────────────────
         // 定数
@@ -71,7 +62,6 @@ namespace MoonObserver.VR
         private DateTime  _anchorUtc;   // スクラブの基準時刻
         private MoonState _moonState;
         private float     _updateTimer;
-        private bool      _infoPanelVisible = false;
         private bool      _illusionEnabled  = true;
         private DateTime  _lastPathUtc = DateTime.MinValue;
 
@@ -94,7 +84,7 @@ namespace MoonObserver.VR
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // 時刻スクラブ API (TimeScrubberUI から呼ぶ)
+        // 時刻スクラブ API (ObservationHUD から呼ぶ)
         // ─────────────────────────────────────────────────────────────────────
 
         /// <summary>基準時刻からの相対時間 (h) で表示時刻を設定する。</summary>
@@ -283,39 +273,13 @@ namespace MoonObserver.VR
         // ─────────────────────────────────────────────────────────────────────
         private void UpdateInfoUI()
         {
-            if (!_infoPanelVisible) return;
-
-            DateTime jst = _currentUtc.AddHours(9);
-            string dirLabel = AzimuthToDirectionLabel((float)_moonState.AzimuthDeg);
-
-            if (altitudeText)     altitudeText.text     = $"Altitude:  {_moonState.AltitudeDeg:F1}°";
-            if (azimuthText)      azimuthText.text      = $"Azimuth:   {dirLabel} {_moonState.AzimuthDeg:F1}°";
-            if (moonAgeText)      moonAgeText.text      = $"Moon Age:  {_moonState.MoonAge:F1} days";
-            if (illuminationText) illuminationText.text = $"Illumin:   {_moonState.IlluminationFraction * 100:F1}%";
-            if (distanceText)     distanceText.text     = $"Distance:  {_moonState.DistanceKm:F0} km";
-            if (currentTimeText)  currentTimeText.text  = $"Time (JST): {jst:yyyy-MM-dd HH:mm}";
-
-            if (locationText)
-            {
-                string place = locationService != null && locationService.HasResolved
-                    ? locationService.resolvedPlaceName
-                    : "Manual";
-                locationText.text = $"Site:      {place} ({latitudeDeg:F2}, {longitudeDeg:F2})";
-            }
-
-            if (weatherText)
-            {
-                weatherText.text = weatherService != null && weatherService.HasData
-                    ? $"Weather:   {weatherService.conditionText}, cloud {weatherService.cloudCover01 * 100f:F0}%, {weatherService.temperatureC:F0}C"
-                    : "Weather:   (no data)";
-            }
+            hud?.Refresh(_moonState, _currentUtc, latitudeDeg, longitudeDeg,
+                         locationService, weatherService);
         }
 
         private void ToggleInfoPanel()
         {
-            _infoPanelVisible = !_infoPanelVisible;
-            if (infoPanel != null) infoPanel.SetActive(_infoPanelVisible);
-            if (_infoPanelVisible) UpdateInfoUI();
+            hud?.ToggleVisibility();
         }
 
         private void ToggleMoonIllusion()
@@ -328,14 +292,6 @@ namespace MoonObserver.VR
         // ─────────────────────────────────────────────────────────────────────
         // ユーティリティ
         // ─────────────────────────────────────────────────────────────────────
-        private string AzimuthToDirectionLabel(float az)
-        {
-            string[] dirs = { "N","NNE","NE","ENE","E","ESE","SE","SSE",
-                              "S","SSW","SW","WSW","W","WNW","NW","NNW" };
-            int idx = Mathf.RoundToInt(az / 22.5f) % 16;
-            return dirs[idx];
-        }
-
         private DateTime ParseManualTime()
         {
             if (DateTime.TryParse(manualUtcTime, out var dt))

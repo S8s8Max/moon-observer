@@ -29,7 +29,6 @@ namespace MoonObserver.VR
         // ─────────────────────────────────────────────────────────────────
         private GameObject  _root;
         private Transform   _arrowPivot;
-        private TextMeshPro _arrowTMP;
         private TextMeshPro _infoTMP;
 
         private void Start()
@@ -100,25 +99,17 @@ namespace MoonObserver.VR
             pivotGO.transform.SetParent(_root.transform, false);
             _arrowPivot = pivotGO.transform;
 
-            var arrowGO  = new GameObject("Arrow");
+            // 矢印は手続き生成のスプライトで描く。
+            // TMP 既定フォント (LiberationSans SDF) には ▲ や ○ が含まれておらず、
+            // グリフとして使うと豆腐 (□) になってしまうため。
+            var arrowGO = new GameObject("Arrow");
             arrowGO.transform.SetParent(_arrowPivot, false);
             arrowGO.transform.localPosition = new Vector3(0f, 0.07f, 0f); // 先端を上へ
-            _arrowTMP = arrowGO.AddComponent<TextMeshPro>();
-            _arrowTMP.text      = "▲";
-            _arrowTMP.fontSize  = 0.14f;
-            _arrowTMP.color     = new Color(1f, 0.95f, 0.3f, 0.95f);
-            _arrowTMP.alignment = TextAlignmentOptions.Center;
-            _arrowTMP.GetComponent<RectTransform>().sizeDelta = new Vector2(0.2f, 0.2f);
+            arrowGO.transform.localScale    = Vector3.one * 0.25f;
 
-            // 円形の枠 (○)
-            var circleGO = new GameObject("Circle");
-            circleGO.transform.SetParent(_root.transform, false);
-            var circleTMP = circleGO.AddComponent<TextMeshPro>();
-            circleTMP.text      = "○";
-            circleTMP.fontSize  = 0.22f;
-            circleTMP.color     = new Color(1f, 0.95f, 0.3f, 0.5f);
-            circleTMP.alignment = TextAlignmentOptions.Center;
-            circleTMP.GetComponent<RectTransform>().sizeDelta = new Vector2(0.3f, 0.3f);
+            var arrowSprite = arrowGO.AddComponent<SpriteRenderer>();
+            arrowSprite.sprite = UI.UISpriteFactory.Triangle;
+            arrowSprite.color  = new Color(1f, 0.95f, 0.3f, 0.95f);
 
             // ── テキストラベル (高度情報) ──────────────────────────────
             var labelGO = new GameObject("Info Label");
