@@ -57,17 +57,27 @@ Shader "MoonObserver/StarField"
 
             struct Varyings
             {
-                float4 posCS : SV_POSITION;
-                float2 uv    : TEXCOORD0;
-                float4 color : TEXCOORD1;
+                float4 posCS       : SV_POSITION;
+                float2 uv          : TEXCOORD0;
+                float4 color       : TEXCOORD1;
+                float  horizonFade : TEXCOORD2;
             };
 
             Varyings Vert(Attributes IN)
             {
                 Varyings OUT;
-                OUT.posCS = TransformObjectToHClip(IN.posOS.xyz);
+                float3 posWS = TransformObjectToWorld(IN.posOS.xyz);
+
+                OUT.posCS = TransformWorldToHClip(posWS);
                 OUT.uv    = IN.uv;
                 OUT.color = IN.color;
+
+                // 星は原点中心の球上にあるので、正規化した y がそのまま sin(高度)。
+                // 地平線より下の星を消し、地平線付近は大気減光で暗くする
+                // (地面が描かれるようになったため、消さないと地中に星が浮いて見える)。
+                float sinAlt = normalize(posWS).y;
+                OUT.horizonFade = smoothstep(-0.01, 0.13, sinAlt);
+
                 return OUT;
             }
 
@@ -88,7 +98,7 @@ Shader "MoonObserver/StarField"
                 float twinkle = 1.0 - _Twinkle
                               + _Twinkle * sin(_Time.y * _TwinkleSpeed + phase);
 
-                float3 col = IN.color.rgb * i * twinkle * _Brightness;
+                float3 col = IN.color.rgb * i * twinkle * _Brightness * IN.horizonFade;
                 return float4(col, 1.0);
             }
             ENDHLSL

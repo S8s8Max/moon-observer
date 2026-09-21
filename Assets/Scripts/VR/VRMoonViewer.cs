@@ -231,8 +231,9 @@ namespace MoonObserver.VR
             UpdateInfoUI();
             moonIndicator?.SetMoonState(_moonState);
 
-            // 星空を恒星時に合わせて日周回転させる
+            // 星空を恒星時に合わせて日周回転させ、空のグラデーションを更新する
             nightSky?.UpdateStarRotation(_currentUtc, latitudeDeg, longitudeDeg);
+            nightSky?.UpdateSky(_currentUtc, latitudeDeg, longitudeDeg, _moonState);
 
             UpdateMoonPath();
         }

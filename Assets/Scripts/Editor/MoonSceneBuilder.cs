@@ -336,6 +336,7 @@ public static class MoonSceneBuilder
             "MoonObserver/MoonAtmosphere",
             "MoonObserver/StarField",
             "MoonObserver/VertexColorLine",
+            "MoonObserver/NightSkyGradient",
         };
 
         int errorCount = 0;

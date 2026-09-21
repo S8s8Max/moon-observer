@@ -11,9 +11,14 @@ namespace MoonObserver.Rendering
     /// </summary>
     public class NightSkyController : MonoBehaviour
     {
-        [Header("夜空の色")]
-        public Color skyColor     = new Color(0.01f, 0.03f, 0.10f);
-        public Color ambientColor = new Color(0.05f, 0.06f, 0.15f);
+        [Header("夜空")]
+        [Tooltip("地面 (地平線より下) の色")]
+        public Color groundColor = new Color(0.012f, 0.014f, 0.020f);
+        [Tooltip("光害の強さ。0=完全な暗所、0.35=郊外、0.8=都市部")]
+        [Range(0f, 1f)]
+        public float lightPollution = 0.35f;
+        [Tooltip("空の描画に失敗した場合のフォールバック色")]
+        public Color fallbackSkyColor = new Color(0.01f, 0.03f, 0.10f);
 
         [Header("星空")]
         [Range(500, 6000)]
@@ -35,30 +40,77 @@ namespace MoonObserver.Rendering
         [Header("月グロー")]
         public Light moonGlowLight;
 
-        [Header("天候")]
-        [Tooltip("全天曇りのときの空の色。雲が地上の光を反射して空は明るくなる")]
-        public Color overcastSkyColor = new Color(0.07f, 0.08f, 0.13f);
-
         // ─────────────────────────────────────────────────────────────────
         private static readonly Color COLOR_HORIZON = new Color(1.0f, 0.3f, 0.05f);
+
+        private static readonly int ID_SunDir     = Shader.PropertyToID("_SunDirection");
+        private static readonly int ID_MoonDir    = Shader.PropertyToID("_MoonDirection");
+        private static readonly int ID_SunAlt     = Shader.PropertyToID("_SunAltitude");
+        private static readonly int ID_MoonIllum  = Shader.PropertyToID("_MoonIllumination");
+        private static readonly int ID_Transmit   = Shader.PropertyToID("_Transmittance");
+        private static readonly int ID_Pollution  = Shader.PropertyToID("_LightPollution");
+        private static readonly int ID_Ground     = Shader.PropertyToID("_GroundColor");
+
         private Transform _starField;
         private Material  _starMaterial;
+        private Material  _skyMaterial;
         private float     _baseStarBrightness = 1.5f;
+        private float     _transmittance = 1f;
 
         /// <summary>
-        /// 天候による大気透過率 (0-1) を星空へ反映する。
+        /// 天候による大気透過率 (0-1) を反映する。
         /// 星を暗くすると同時に、雲が地上光を反射して空自体は明るくなる。
         /// </summary>
         public void SetTransmittance(float transmittance)
         {
-            transmittance = Mathf.Clamp01(transmittance);
+            _transmittance = Mathf.Clamp01(transmittance);
 
             if (_starMaterial != null && _starMaterial.HasProperty("_Brightness"))
-                _starMaterial.SetFloat("_Brightness", _baseStarBrightness * transmittance);
+                _starMaterial.SetFloat("_Brightness", _baseStarBrightness * _transmittance);
 
-            var cam = Camera.main;
-            if (cam != null)
-                cam.backgroundColor = Color.Lerp(overcastSkyColor, skyColor, transmittance);
+            if (_skyMaterial != null)
+                _skyMaterial.SetFloat(ID_Transmit, _transmittance);
+        }
+
+        /// <summary>
+        /// 太陽・月の位置に応じて空のグラデーションを更新する。
+        /// 空の色は太陽高度 (薄明の段階) が支配的なので毎回計算する。
+        /// </summary>
+        public void UpdateSky(DateTime utc, double latitudeDeg, double longitudeDeg,
+                              MoonState moonState)
+        {
+            if (_skyMaterial == null) return;
+
+            var sun = SunPosition.Calculate(utc, latitudeDeg, longitudeDeg);
+
+            _skyMaterial.SetVector(ID_SunDir,  AltAzToDirection(sun.AltitudeDeg, sun.AzimuthDeg));
+            _skyMaterial.SetVector(ID_MoonDir, AltAzToDirection(moonState.AltitudeDeg,
+                                                               moonState.AzimuthDeg));
+            _skyMaterial.SetFloat(ID_SunAlt,    (float)sun.AltitudeDeg);
+            _skyMaterial.SetFloat(ID_MoonIllum, (float)moonState.IlluminationFraction);
+            _skyMaterial.SetFloat(ID_Pollution, lightPollution);
+
+            // 環境光も空に合わせる。月が明るいほど地上が持ち上がる
+            float moonLift = (float)moonState.IlluminationFraction
+                           * Mathf.Clamp01((float)moonState.AltitudeDeg / 30f);
+            float dayLift  = Mathf.Clamp01(((float)sun.AltitudeDeg + 6f) / 12f);
+
+            RenderSettings.ambientLight = Color.Lerp(
+                new Color(0.030f, 0.038f, 0.070f) + Color.white * moonLift * 0.10f,
+                new Color(0.42f, 0.47f, 0.58f),
+                dayLift);
+        }
+
+        private static Vector4 AltAzToDirection(double altDeg, double azDeg)
+        {
+            float alt = (float)(altDeg * Mathf.Deg2Rad);
+            float az  = (float)(azDeg  * Mathf.Deg2Rad);
+
+            return new Vector4(
+                Mathf.Sin(az) * Mathf.Cos(alt),
+                Mathf.Sin(alt),
+                Mathf.Cos(az) * Mathf.Cos(alt),
+                0f);
         }
 
         private void Start()
@@ -70,19 +122,46 @@ namespace MoonObserver.Rendering
         // ── 夜空環境設定 ────────────────────────────────────────────────
         private void ApplyNightEnvironment()
         {
-            RenderSettings.ambientMode  = AmbientMode.Flat;
-            RenderSettings.ambientLight = ambientColor;
-            RenderSettings.fog          = false;
-            RenderSettings.skybox       = null;
+            RenderSettings.ambientMode = AmbientMode.Flat;
+            RenderSettings.fog         = false;
+
+            _skyMaterial = CreateSkyMaterial();
 
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.clearFlags      = CameraClearFlags.SolidColor;
-                cam.backgroundColor = skyColor;
+                if (_skyMaterial != null)
+                {
+                    RenderSettings.skybox = _skyMaterial;
+                    cam.clearFlags        = CameraClearFlags.Skybox;
+                }
+                else
+                {
+                    // シェーダーが無い場合でも真っ暗にはしない
+                    RenderSettings.skybox = null;
+                    cam.clearFlags        = CameraClearFlags.SolidColor;
+                    cam.backgroundColor   = fallbackSkyColor;
+                }
+
                 if (cam.farClipPlane < starSphereRadius * 1.5f)
                     cam.farClipPlane = starSphereRadius * 1.5f;
             }
+        }
+
+        private Material CreateSkyMaterial()
+        {
+            var shader = Shader.Find("MoonObserver/NightSkyGradient");
+            if (shader == null)
+            {
+                Debug.LogWarning("[NightSkyController] MoonObserver/NightSkyGradient シェーダーが見つかりません。");
+                return null;
+            }
+
+            var mat = new Material(shader);
+            mat.SetColor(ID_Ground,    groundColor);
+            mat.SetFloat(ID_Pollution, lightPollution);
+            mat.SetFloat(ID_Transmit,  _transmittance);
+            return mat;
         }
 
         // ── メッシュベース星フィールド ──────────────────────────────────
