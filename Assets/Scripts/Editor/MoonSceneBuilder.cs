@@ -39,14 +39,9 @@ public static class MoonSceneBuilder
         sunGO.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
         // ── 2. XR Origin (VR) ───────────────────────────────────────────
-        // メニューから作成 (XR Interaction Toolkit 3.x)
-        EditorApplication.ExecuteMenuItem("GameObject/XR/XR Origin (VR)");
-        var xrOriginGO = GameObject.Find("XR Origin (VR)");
-        if (xrOriginGO == null)
-        {
-            Debug.LogWarning("[MoonSceneBuilder] XR Origin (VR) の自動作成に失敗しました。\n" +
-                             "手動で GameObject > XR > XR Origin (VR) を追加してください。");
-        }
+        // ExecuteMenuItem は非同期でシーン状態を壊すケースがあるため手動誘導のみ
+        Debug.Log("[MoonSceneBuilder] XR Origin は手動で追加してください:\n" +
+                  "  GameObject > XR > XR Origin (VR)");
 
         // ── 3. Moon (MoonRenderer + MeshRenderer + MeshFilter) ──────────
         var moonGO       = new GameObject("Moon");
@@ -124,15 +119,12 @@ public static class MoonSceneBuilder
         EditorSceneManager.SaveScene(scene, scenePath);
         AssetDatabase.Refresh();
 
-        string xrNote = xrOriginGO != null ? "" :
-            "\n⚠ XR Origin の自動作成に失敗しました。\n  GameObject > XR > XR Origin (VR) を手動で追加してください。";
-
         EditorUtility.DisplayDialog("構築完了！",
-            $"MoonViewer シーンを作成しました。\n{scenePath}\n{xrNote}\n\n" +
-            "次のステップ:\n" +
-            "1. XR Device Simulator プレハブを Hierarchy にドラッグ\n" +
-            "2. ▶ Play で実行\n" +
-            "   (マウス移動 = 視点回転)",
+            $"MoonViewer シーンを作成しました。\n{scenePath}\n\n" +
+            "残り手順:\n" +
+            "1. GameObject > XR > XR Origin (VR) を追加\n" +
+            "2. XR Device Simulator プレハブを Hierarchy にドラッグ\n" +
+            "3. ▶ Play で実行",
             "OK");
 
         Debug.Log("[MoonSceneBuilder] シーン構築完了: " + scenePath);
