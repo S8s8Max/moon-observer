@@ -127,7 +127,11 @@ public static class MoonSceneBuilder
         viewer.moonIndicator = indicator;
 
         // ── 9. XR Device Simulator ───────────────────────────────────────
-        InstantiateXRDeviceSimulator();
+        // PC テストでは XR Device Simulator がマウス入力を横取りするため自動配置しない。
+        // VR コントローラーをエディターで模擬したい場合は
+        // Assets/Samples/XR Interaction Toolkit/.../XR Device Simulator を手動で配置してください。
+        Debug.Log("[MoonSceneBuilder] XR Device Simulator は自動配置されません。\n" +
+                  "必要な場合は Samples フォルダから手動で追加してください。");
 
         // ── シーン保存 ────────────────────────────────────────────────────
         if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
@@ -139,7 +143,14 @@ public static class MoonSceneBuilder
         AssetDatabase.Refresh();
 
         EditorUtility.DisplayDialog("構築完了！",
-            $"シーンを作成しました: {scenePath}\n\n▶ Play で即実行できます。",
+            $"シーンを作成しました: {scenePath}\n\n" +
+            "▶ Play で即実行できます。\n\n" +
+            "【PC 操作方法】\n" +
+            "・Game ビューをクリック → カーソルロック → マウス移動で視点回転\n" +
+            "・Escape キー → カーソルロック解除\n" +
+            "・← → 矢印キー → 時刻スクロール\n" +
+            "・F キー → 情報パネル表示/非表示\n" +
+            "・R キー → 現在時刻にリセット",
             "OK");
 
         Debug.Log("[MoonSceneBuilder] シーン構築完了: " + scenePath);
