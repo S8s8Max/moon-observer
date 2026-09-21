@@ -135,9 +135,11 @@ Shader "MoonObserver/MoonSurface"
                 #else
                     float3 ld = _LightDirection;
                 #endif
-                return ApplyShadowBias(TransformWorldToHClip(posWS), normWS, ld);
+                // ApplyShadowBias の代わりに手動バイアス (URP 17 Metal 互換)
+                posWS += normWS * 0.005 + ld * 0.005;
+                return TransformWorldToHClip(posWS);
             }
-            half4 ShadowFrag() : SV_Target { return 0; }
+            half4 ShadowFrag() : SV_Target { return half4(0,0,0,0); }
             ENDHLSL
         }
     }
