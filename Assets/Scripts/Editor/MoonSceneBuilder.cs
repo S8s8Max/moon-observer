@@ -2,7 +2,6 @@ using System.IO;
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using UnityEngine.InputSystem.XR;
 using Unity.XR.CoreUtils;
 using TMPro;
 using MoonObserver.Rendering;
@@ -162,17 +161,10 @@ public static class MoonSceneBuilder
         camGO.transform.SetParent(camOffsetGO.transform, false);
         vrCamera              = camGO.AddComponent<Camera>();
         vrCamera.tag          = "MainCamera";
-        vrCamera.farClipPlane = 2000f; // 星球 (800m) + 月 (600m) を余裕でカバー
+        vrCamera.farClipPlane = 2000f;
         camGO.AddComponent<AudioListener>();
-
-        // Head tracking (Input System)
-        var tpd = camGO.AddComponent<TrackedPoseDriver>();
-        tpd.positionAction = new UnityEngine.InputSystem.InputAction(
-            binding: "<XRHMD>/centerEyePosition",
-            expectedControlType: "Vector3");
-        tpd.rotationAction = new UnityEngine.InputSystem.InputAction(
-            binding: "<XRHMD>/centerEyeRotation",
-            expectedControlType: "Quaternion");
+        // PC テスト用マウス視点 (Quest 3 実機では XR トラッキングが上書きする)
+        camGO.AddComponent<FreeLookCamera>();
 
         // XROrigin へ参照を設定
         xrOrigin.CameraFloorOffsetObject = camOffsetGO;

@@ -100,6 +100,7 @@ namespace MoonObserver.VR
         // ─────────────────────────────────────────────────────────────────────
         private void HandleInput()
         {
+            // ── XR コントローラー入力 ─────────────────────────────────────
             var rightStick = _rightStickAction?.ReadValue<Vector2>() ?? Vector2.zero;
             if (Mathf.Abs(rightStick.x) > STICK_THRESHOLD)
             {
@@ -124,6 +125,31 @@ namespace MoonObserver.VR
             {
                 _currentUtc = DateTime.UtcNow;
                 useRealTime = true;
+            }
+
+            // ── PC キーボードフォールバック ───────────────────────────────
+            // F: 情報パネル表示/非表示
+            if (Input.GetKeyDown(KeyCode.F))
+                ToggleInfoPanel();
+            // B: 月の錯視エフェクト ON/OFF
+            if (Input.GetKeyDown(KeyCode.B))
+                ToggleMoonIllusion();
+            // R: 現在時刻にリセット
+            if (Input.GetKeyDown(KeyCode.R))
+            {
+                _currentUtc = DateTime.UtcNow;
+                useRealTime = true;
+            }
+            // ← →: 時間を前後に移動
+            if (Input.GetKey(KeyCode.LeftArrow))
+            {
+                _currentUtc = _currentUtc.AddHours(-Time.deltaTime * 3.0);
+                useRealTime = false;
+            }
+            if (Input.GetKey(KeyCode.RightArrow))
+            {
+                _currentUtc = _currentUtc.AddHours(Time.deltaTime * 3.0);
+                useRealTime = false;
             }
         }
 
