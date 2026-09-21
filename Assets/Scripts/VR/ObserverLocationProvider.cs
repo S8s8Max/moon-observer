@@ -15,7 +15,7 @@ namespace MoonObserver.VR
     /// そのため IP 測位 (都市レベル) を既定とする。
     /// 数 km の誤差は月の高度に 0.05° 未満しか影響しないため天体観測には十分。
     /// </summary>
-    public class LocationService : MonoBehaviour
+    public class ObserverLocationProvider : MonoBehaviour
     {
         public enum LocationMode
         {
@@ -67,7 +67,7 @@ namespace MoonObserver.VR
             resolvedPlaceName = "Manual";
             HasResolved       = true;
 
-            Debug.Log($"[LocationService] 手動座標を使用: {LatitudeDeg:F4}, {LongitudeDeg:F4}");
+            Debug.Log($"[ObserverLocationProvider] 手動座標を使用: {LatitudeDeg:F4}, {LongitudeDeg:F4}");
         }
 
         // ── IP 測位 ──────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ namespace MoonObserver.VR
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogWarning($"[LocationService] IP 測位に失敗しました ({req.error})。手動座標を使用します。");
+                Debug.LogWarning($"[ObserverLocationProvider] IP 測位に失敗しました ({req.error})。手動座標を使用します。");
                 UseManualCoordinates();
                 yield break;
             }
@@ -88,13 +88,13 @@ namespace MoonObserver.VR
             try { data = JsonUtility.FromJson<IpApiResponse>(req.downloadHandler.text); }
             catch (System.Exception e)
             {
-                Debug.LogWarning("[LocationService] IP 測位の応答を解析できませんでした: " + e.Message);
+                Debug.LogWarning("[ObserverLocationProvider] IP 測位の応答を解析できませんでした: " + e.Message);
             }
 
             // 座標 0,0 は「取得失敗」を意味する (ギニア湾沖の海上)
             if (data == null || (data.latitude == 0.0 && data.longitude == 0.0))
             {
-                Debug.LogWarning("[LocationService] IP 測位の結果が不正です。手動座標を使用します。");
+                Debug.LogWarning("[ObserverLocationProvider] IP 測位の結果が不正です。手動座標を使用します。");
                 UseManualCoordinates();
                 yield break;
             }
@@ -116,7 +116,7 @@ namespace MoonObserver.VR
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogWarning($"[LocationService] 都市名検索に失敗しました ({req.error})。手動座標を使用します。");
+                Debug.LogWarning($"[ObserverLocationProvider] 都市名検索に失敗しました ({req.error})。手動座標を使用します。");
                 UseManualCoordinates();
                 yield break;
             }
@@ -125,12 +125,12 @@ namespace MoonObserver.VR
             try { data = JsonUtility.FromJson<GeocodeResponse>(req.downloadHandler.text); }
             catch (System.Exception e)
             {
-                Debug.LogWarning("[LocationService] 都市名検索の応答を解析できませんでした: " + e.Message);
+                Debug.LogWarning("[ObserverLocationProvider] 都市名検索の応答を解析できませんでした: " + e.Message);
             }
 
             if (data?.results == null || data.results.Length == 0)
             {
-                Debug.LogWarning($"[LocationService] 都市 '{cityName}' が見つかりませんでした。手動座標を使用します。");
+                Debug.LogWarning($"[ObserverLocationProvider] 都市 '{cityName}' が見つかりませんでした。手動座標を使用します。");
                 UseManualCoordinates();
                 yield break;
             }
@@ -155,7 +155,7 @@ namespace MoonObserver.VR
                 moonViewer.OnLocationChanged();
             }
 
-            Debug.Log($"[LocationService] 現在地: {placeName} ({lat:F4}, {lon:F4})");
+            Debug.Log($"[ObserverLocationProvider] 現在地: {placeName} ({lat:F4}, {lon:F4})");
         }
 
         // ── JSON DTO ─────────────────────────────────────────────────────

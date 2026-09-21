@@ -44,7 +44,7 @@ namespace MoonObserver.VR
         public Rendering.MoonPathRenderer   moonPath;
 
         [Header("現在地・天候")]
-        public LocationService locationService;
+        public ObserverLocationProvider locationService;
         public WeatherService  weatherService;
 
         [Header("UI パネル")]
@@ -115,7 +115,7 @@ namespace MoonObserver.VR
         }
 
         /// <summary>
-        /// LocationService が観測地点を確定したときに呼ばれる。
+        /// ObserverLocationProvider が観測地点を確定したときに呼ばれる。
         /// 緯度経度が変わると月の軌道も星空も変わるため全て作り直す。
         /// </summary>
         public void OnLocationChanged()

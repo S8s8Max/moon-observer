@@ -151,7 +151,7 @@ public static class MoonSceneBuilder
 
         // ── 7a. 現在地 (IP 測位) と天気 (Open-Meteo) ─────────────────────
         var servicesGO = new GameObject("Location & Weather");
-        var location   = servicesGO.AddComponent<LocationService>();
+        var location   = servicesGO.AddComponent<ObserverLocationProvider>();
         var weather    = servicesGO.AddComponent<WeatherService>();
         location.moonViewer = viewer;
         weather.moonViewer  = viewer;
