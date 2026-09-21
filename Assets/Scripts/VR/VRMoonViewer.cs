@@ -127,29 +127,23 @@ namespace MoonObserver.VR
                 useRealTime = true;
             }
 
-            // ── PC キーボードフォールバック ───────────────────────────────
-            // F: 情報パネル表示/非表示
-            if (Input.GetKeyDown(KeyCode.F))
-                ToggleInfoPanel();
-            // B: 月の錯視エフェクト ON/OFF
-            if (Input.GetKeyDown(KeyCode.B))
-                ToggleMoonIllusion();
-            // R: 現在時刻にリセット
-            if (Input.GetKeyDown(KeyCode.R))
+            // ── PC キーボードフォールバック (New Input System) ────────────
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            if (kb != null)
             {
-                _currentUtc = DateTime.UtcNow;
-                useRealTime = true;
-            }
-            // ← →: 時間を前後に移動
-            if (Input.GetKey(KeyCode.LeftArrow))
-            {
-                _currentUtc = _currentUtc.AddHours(-Time.deltaTime * 3.0);
-                useRealTime = false;
-            }
-            if (Input.GetKey(KeyCode.RightArrow))
-            {
-                _currentUtc = _currentUtc.AddHours(Time.deltaTime * 3.0);
-                useRealTime = false;
+                if (kb.fKey.wasPressedThisFrame) ToggleInfoPanel();
+                if (kb.bKey.wasPressedThisFrame) ToggleMoonIllusion();
+                if (kb.rKey.wasPressedThisFrame) { _currentUtc = DateTime.UtcNow; useRealTime = true; }
+                if (kb.leftArrowKey.isPressed)
+                {
+                    _currentUtc = _currentUtc.AddHours(-Time.deltaTime * 3.0);
+                    useRealTime = false;
+                }
+                if (kb.rightArrowKey.isPressed)
+                {
+                    _currentUtc = _currentUtc.AddHours(Time.deltaTime * 3.0);
+                    useRealTime = false;
+                }
             }
         }
 
