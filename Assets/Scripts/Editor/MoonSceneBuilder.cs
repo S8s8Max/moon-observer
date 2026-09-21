@@ -23,10 +23,16 @@ public static class MoonSceneBuilder
             "はい、構築する", "キャンセル"))
             return;
 
-        // ── 0. TMP Essential Resources ───────────────────────────────────
+        // ── 0. URP パイプラインを有効化 ──────────────────────────────────
+        // URP アセットが未割り当てだと Built-in RP で描画され、
+        // URP シェーダーがすべてピンクになるため最初に保証する
+        URPSetup.EnsureURPAssigned();
+        URPSetup.LogActivePipeline();
+
+        // ── 0b. TMP Essential Resources ──────────────────────────────────
         EnsureTMPResources();
 
-        // ── 0b. シェーダーを検証 (コンパイルエラーを可視化) ───────────────
+        // ── 0c. シェーダーを検証 (コンパイルエラーを可視化) ───────────────
         ValidateAllShaders();
 
         EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -332,6 +338,9 @@ public static class MoonSceneBuilder
     [MenuItem("MoonObserver/Validate Shaders")]
     public static void ValidateAllShaders()
     {
+        // シェーダーが正常でもパイプラインが URP でなければピンクになるため最初に確認
+        URPSetup.LogActivePipeline();
+
         string[] names =
         {
             "MoonObserver/MoonSurface",
