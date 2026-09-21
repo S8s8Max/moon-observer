@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>MoonObserver</RootNamespace>
+    <!-- Unity UnityEngine スタブなしで純粋C#テストを実行するため、
+         Unity依存のファイルはコンパイルから除外 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.6.0" />
+  </ItemGroup>
+
+  <!-- 天文暦エンジン本体 (MonoBehaviour非依存) -->
+  <ItemGroup>
+    <Compile Include="../Assets/Scripts/Astronomy/MoonState.cs" />
+    <Compile Include="../Assets/Scripts/Astronomy/MoonAstronomyEngine.cs" />
+    <Compile Include="AstronomyEngineTests.cs" />
+  </ItemGroup>
+
+  <!-- Unity専用ファイルは除外 -->
+  <ItemGroup>
+    <Compile Remove="../Assets/Scripts/Astronomy/AstronomyTests.cs" />
+  </ItemGroup>
+
+</Project>

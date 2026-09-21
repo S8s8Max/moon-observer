@@ -1,0 +1,78 @@
+このファイルはシーン構成の説明です。MoonViewer.unity はUnity Editorで手動作成してください。
+
+シーン階層 (必要なGameObjects):
+─────────────────────────────────────────────────────
+[Lighting]
+  Directional Light "Sun"
+    - Light コンポーネント: Mode=Realtime, Color=(1.0, 0.95, 0.8), Intensity=1.0
+    - 参照: VRMoonViewer.sunLight
+
+[XR Rig] (XR Origin コンポーネント)
+  Camera Offset
+    Main Camera
+      - Camera コンポーネント: Clipping Near=0.1, Far=3000
+      - TrackedPoseDriver コンポーネント
+  LeftHand Controller (XRController)
+    XR Ray Interactor
+  RightHand Controller (XRController)
+    XR Ray Interactor
+  Locomotion System
+    Continuous Move Provider (左スティック移動)
+    Continuous Turn Provider (左スティック回転)
+
+[Moon] (MoonRenderer.cs, MeshRenderer, MeshFilter)
+  - Material: Assets/Materials/MoonSurface.mat
+  - Position: (0, 0, 1000) — Start時にVRMoonViewerが更新
+
+[Atmosphere Effects] (AtmosphericEffects.cs)
+  - 参照: moonRenderer = [Moon]
+  - 参照: moonAtmosphereMaterial = Assets/Materials/MoonAtmosphere.mat
+
+[Moon Glow] (Light)
+  - Type: Point
+  - Range: 200, Intensity: 1.5
+  - 参照: SkyboxController.moonGlowLight
+
+[UI Canvas] (Canvas: Render Mode=World Space)
+  Info Panel (Panel)
+    Altitude Text (TextMeshPro)
+    Azimuth Text (TextMeshPro)
+    MoonAge Text (TextMeshPro)
+    Illumination Text (TextMeshPro)
+    Distance Text (TextMeshPro)
+    CurrentTime Text (TextMeshPro)
+
+[VR Moon Viewer Controller] (VRMoonViewer.cs)
+  - moonRenderer → [Moon]
+  - moonTransform → [Moon].transform
+  - atmosphericEffects → [Atmosphere Effects]
+  - skyboxController → [Skybox Controller]
+  - infoPanel → [UI Canvas/Info Panel]
+  - latitudeDeg: 35.6895 (東京)
+  - longitudeDeg: 139.6917
+
+[Skybox Controller] (SkyboxController.cs)
+  - skyboxMaterial → Project Settings/Graphics の Skybox Material
+  - moonGlowLight → [Moon Glow]
+
+─────────────────────────────────────────────────────
+Skybox 設定 (Project Settings > Graphics > Skybox Material):
+  Custom Procedural Night Sky Material を使用
+  または Assets/Materials/NightSky.mat を作成
+
+Post Processing (URP Renderer Data に追加):
+  - Bloom: Threshold=0.9, Intensity=0.4
+  - Color Grading: 夜空に合わせた設定
+
+Build Settings (Android/Meta Quest 3 向け):
+  File > Build Settings > Android
+  Player Settings:
+    XR Plugin Management > OpenXR を有効化
+    Quest Features: Hand Tracking (Optional)
+    Target API Level: 32以上
+    IL2CPP バックエンド使用
+    Graphics API: Vulkan (推奨)
+
+SteamVR / PC VR:
+  XR Plugin Management > OpenXR
+  Interaction Profile: Valve Index Controller / Oculus Touch
