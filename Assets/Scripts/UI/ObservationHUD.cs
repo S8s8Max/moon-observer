@@ -197,7 +197,7 @@ namespace MoonObserver.UI
 
             _statusText = ValueLine(card.transform, 15f, UITheme.TextMuted, ref y,
                                     18f * statusLineCount);
-            _statusText.enableWordWrapping = true;
+            _statusText.textWrappingMode = TMPro.TextWrappingModes.Normal;
             _statusText.text = "";
 
             // 中身に合わせてカードの高さを決める
@@ -503,7 +503,7 @@ namespace MoonObserver.UI
             t.color         = color;
             t.alignment     = align;
             t.raycastTarget = false;
-            t.enableWordWrapping = false;
+            t.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
             return t;
         }
 
