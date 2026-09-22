@@ -48,9 +48,13 @@ namespace MoonObserver.VR
         private void Awake()
         {
             _volume = GetComponent<Volume>();
-            _volume.TryGet(out _bloom);
-            _volume.TryGet(out _vignette);
-            _volume.TryGet(out _colorAdj);
+            var prof = _volume.sharedProfile;
+            if (prof != null)
+            {
+                prof.TryGet(out _bloom);
+                prof.TryGet(out _vignette);
+                prof.TryGet(out _colorAdj);
+            }
 
             // 開始時は真っ暗
             if (_vignette  != null) _vignette.intensity.Override(vignetteOpen);
